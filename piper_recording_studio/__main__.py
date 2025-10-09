@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import csv
+import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
@@ -54,7 +55,7 @@ def main() -> None:
         action="store_true",
         help="Require login code and user output directory to exist",
     )
-    parser.add_argument("--cc0", action="store_true", help="Show public domain notice")
+    # Public domain notice option removed
     #
     parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to console"
@@ -85,7 +86,6 @@ def main() -> None:
             "index.html",
             languages=sorted(languages.items()),
             multi_user=args.multi_user,
-            cc0=args.cc0,
         )
 
     @app.route("/done.html")
@@ -254,6 +254,22 @@ def main() -> None:
     async def js(filename) -> Response:
         """Javascript static endpoint."""
         return await send_from_directory(js_dir, filename)
+        
+    @app.route("/js/<path:filename>.map", methods=["GET"])
+    async def js_map(filename) -> Response:
+        """Javascript source map endpoint."""
+        try:
+            return await send_from_directory(js_dir, f"{filename}.map")
+        except:
+            # Return valid empty source map if file doesn't exist
+            empty_source_map = {
+                "version": 3,
+                "file": f"{filename}",
+                "sources": [],
+                "names": [],
+                "mappings": ""
+            }
+            return Response(json.dumps(empty_source_map), status=200, mimetype="application/json")
 
     @app.route("/img/<path:filename>", methods=["GET"])
     async def img(filename) -> Response:

@@ -31,7 +31,7 @@
             </div>
         </div>
         {% else: %}
-        <form id="form" method="POST" onsubmit="submitAudio()">
+        <form id="form" method="POST" onsubmit="submitAudio(event)">
             <input type="hidden" name="language" value="{{ language }}">
             <input type="hidden" name="userId" value="{{ user_id }}">
             <input id="promptGroup" type="hidden" name="promptGroup" value="{{ prompt_group }}">
@@ -90,15 +90,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="control-group mt-2">
-                    <div class="controls row">
-                        <div class="col-auto">
-                            <p>
-                                By clicking <strong>Submit</strong>, you agree to dedicate your recorded audio to the <a href="https://creativecommons.org/publicdomain/zero/1.0/">public domain (CC0)</a>
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                <!-- Public domain notice removed -->
                 <div class="control-group mt-5">
                     <div class="row-fluid">
                         <label for="complete_percent">Progress: <span id="numComplete">{{ num_complete }}</span> / <span id="numItems">{{ num_items }}</span></label>
@@ -145,10 +137,12 @@
              recording = false;
              recorder.stop();
 
-             blob = new Blob(chunks, { 'type' : 'audio/webm' });
+             // Use the correct MIME type based on the detected audio format
+             blob = new Blob(chunks, { 'type' : audioFormat });
 
              // Audio preview
-             q('#clip').src = window.URL.createObjectURL(blob);
+             var audioURL = window.URL.createObjectURL(blob);
+             q('#clip').src = audioURL;
              q('#clipDiv').hidden = false;
 
              q('#recordIcon').classList.remove('fa-stop');
