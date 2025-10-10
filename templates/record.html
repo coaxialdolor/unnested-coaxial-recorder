@@ -55,7 +55,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="promptList" class="form-label">Prompt List</label>
-                            <select class="form-select" id="promptList" onchange="loadNextPrompt()">
+                            <select class="form-select" id="promptList" onchange="loadPromptList()">
                                 <option value="">Select a prompt list...</option>
                             </select>
                         </div>
@@ -66,6 +66,16 @@
                                     Auto-advance after recording
                                 </label>
                             </div>
+                        </div>
+                        
+                        <!-- Recording Controls -->
+                        <div class="mb-3">
+                            <button id="doneRecordingBtn" class="btn btn-primary btn-sm w-100 mb-2" onclick="doneRecording()">
+                                <i class="fas fa-check-circle me-1"></i>Done Recording
+                            </button>
+                            <button id="openFolderBtn" class="btn btn-outline-secondary btn-sm w-100" onclick="openTargetFolder()">
+                                <i class="fas fa-folder-open me-1"></i>Open Target Folder
+                            </button>
                         </div>
                         <div class="progress mb-3">
                             <div id="recordingProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
@@ -88,21 +98,48 @@
                         </div>
                         
                         <div class="text-center my-4">
+                            <button id="prevButton" class="btn btn-outline-secondary me-2" onclick="previousPrompt()" disabled>
+                                <i class="fas fa-backward me-2"></i>Previous
+                            </button>
                             <button id="recordButton" class="btn btn-success btn-lg" onclick="toggleRecording()" disabled>
                                 <i class="fas fa-microphone me-2"></i>Start Recording
                             </button>
-                            <button id="skipButton" class="btn btn-warning ms-2" onclick="skipPrompt()" disabled>
-                                <i class="fas fa-forward me-2"></i>Skip
+                            <button id="nextButton" class="btn btn-outline-primary ms-2" onclick="nextPrompt()" disabled>
+                                <i class="fas fa-forward me-2"></i>Next
                             </button>
                         </div>
 
                         <div id="recordingStatus" class="alert alert-warning d-none">
                             <i class="fas fa-circle text-danger me-2"></i>Recording in progress...
                         </div>
+                        
+                        <!-- Input Level Indicator -->
+                        <div id="inputLevelContainer" class="d-none mb-3">
+                            <label class="form-label">Input Level</label>
+                            <div class="progress" style="height: 20px;">
+                                <div id="inputLevel" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <!-- Clipping Indicator -->
+                            <div id="clippingIndicator" class="d-none mt-2">
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>CLIPPING
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Waveform Visualization -->
+                        <div id="waveformContainer" class="d-none mb-3">
+                            <label class="form-label">Recording Waveform</label>
+                            <canvas id="waveformCanvas" width="400" height="100" class="border rounded"></canvas>
+                        </div>
 
                         <div id="audioPlayback" class="mt-3 d-none">
                             <h6>Playback:</h6>
                             <audio id="playbackAudio" controls class="w-100"></audio>
+                            <!-- Playback Waveform -->
+                            <div id="playbackWaveformContainer" class="mt-2">
+                                <canvas id="playbackWaveformCanvas" width="400" height="60" class="border rounded"></canvas>
+                            </div>
                             <div class="mt-2">
                                 <button class="btn btn-sm btn-primary" onclick="saveRecording()">
                                     <i class="fas fa-save me-1"></i>Save Recording
@@ -115,7 +152,20 @@
                     </div>
                 </div>
 
-                <div class="card mt-3">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">Recording Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recordingStats">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>Select a profile to view statistics
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">Recording History</h5>
                     </div>
@@ -139,6 +189,21 @@
         let isRecording = false;
         let currentPromptId = null;
         let currentPromptText = '';
+        let currentPromptIndex = 0;
+        let allPrompts = [];
+        let currentProfileId = '';
+        let currentPromptListId = '';
+        let recordedPrompts = new Set(); // Track which prompts have been recorded
+        
+        // Audio visualization
+        let audioContext;
+        let analyser;
+        let microphone;
+        let dataArray;
+        let animationId;
+        let waveformData = [];
+        let clippingCount = 0;
+        let isClipping = false;
 
         // Load voice profiles on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -159,6 +224,65 @@
                     });
                 })
                 .catch(error => console.error('Error loading profiles:', error));
+        }
+
+        function loadRecordingStats() {
+            if (!currentProfileId) {
+                document.getElementById('recordingStats').innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-info-circle me-2"></i>Select a profile to view statistics
+                    </div>
+                `;
+                return;
+            }
+
+            fetch(`/api/recording_stats/${currentProfileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    displayRecordingStats(data);
+                })
+                .catch(error => console.error('Error loading recording stats:', error));
+        }
+
+        function displayRecordingStats(stats) {
+            const statsContainer = document.getElementById('recordingStats');
+            
+            if (stats.length === 0) {
+                statsContainer.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-info-circle me-2"></i>No recordings found
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            stats.forEach(stat => {
+                const language = stat.language_code.startsWith('en-US') ? '🇺🇸' : 
+                               stat.language_code.startsWith('en-GB') ? '🇬🇧' : 
+                               stat.language_code.startsWith('sv-SE') ? '🇸🇪' : 
+                               stat.language_code.startsWith('it-IT') ? '🇮🇹' : '';
+                
+                const category = stat.prompt_list.includes('General') ? 'General' :
+                               stat.prompt_list.includes('Chat') ? 'Chat' :
+                               stat.prompt_list.includes('CustomerService') ? 'Customer Service' : stat.prompt_list;
+                
+                const percentage = stat.total > 0 ? Math.round((stat.recorded / stat.total) * 100) : 0;
+                
+                html += `
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="small">${language} ${category}</span>
+                            <span class="small text-muted">${stat.recorded}/${stat.total}</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar" role="progressbar" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            statsContainer.innerHTML = html;
         }
 
         function loadPrompts() {
@@ -191,43 +315,126 @@
                 .catch(error => console.error('Error loading prompts:', error));
         }
 
-        function loadNextPrompt() {
+        function loadPrompts() {
             const profileId = document.getElementById('voiceProfile').value;
-            const promptListId = document.getElementById('promptList').value;
-            
-            if (!profileId || !promptListId) {
-                document.getElementById('currentPrompt').innerHTML = '<p class="mb-0">Please select a voice profile and prompt list to begin recording.</p>';
-                document.getElementById('recordButton').disabled = true;
-                document.getElementById('skipButton').disabled = true;
+            if (!profileId) {
+                document.getElementById('promptList').innerHTML = '<option value="">Select a prompt list...</option>';
                 return;
             }
 
-            fetch(`/api/next_prompt/${profileId}/${promptListId}`)
+            currentProfileId = profileId;
+            fetch(`/api/profiles/${profileId}/prompts`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.prompt) {
-                        currentPromptId = data.prompt.id;
-                        currentPromptText = data.prompt.text;
-                        document.getElementById('currentPrompt').innerHTML = `
-                            <h6>Prompt #${data.prompt.id}</h6>
-                            <p class="mb-0 fs-5">${data.prompt.text}</p>
-                        `;
-                        document.getElementById('recordButton').disabled = false;
-                        document.getElementById('skipButton').disabled = false;
-                        updateProgress(data.progress);
-                    } else {
-                        document.getElementById('currentPrompt').innerHTML = '<p class="mb-0">All prompts have been recorded!</p>';
-                        document.getElementById('recordButton').disabled = true;
-                        document.getElementById('skipButton').disabled = true;
-                    }
+                    const select = document.getElementById('promptList');
+                    select.innerHTML = '<option value="">Select a prompt list...</option>';
+                    data.forEach(prompt => {
+                        const option = document.createElement('option');
+                        option.value = prompt.id;
+                        // Show language and prompt count in the dropdown
+                        const language = prompt.name.startsWith('en-US_') ? '🇺🇸' : 
+                                       prompt.name.startsWith('en-GB_') ? '🇬🇧' : 
+                                       prompt.name.startsWith('sv-SE_') ? '🇸🇪' : 
+                                       prompt.name.startsWith('it-IT_') ? '🇮🇹' : '';
+                        const category = prompt.name.includes('General') ? 'General' :
+                                       prompt.name.includes('Chat') ? 'Chat' :
+                                       prompt.name.includes('CustomerService') ? 'Customer Service' : '';
+                        option.textContent = `${language} ${category} (${prompt.prompt_count} prompts)`;
+                        select.appendChild(option);
+                    });
+                    
+                    // Load recording statistics
+                    loadRecordingStats();
                 })
-                .catch(error => console.error('Error loading next prompt:', error));
+                .catch(error => console.error('Error loading prompts:', error));
         }
 
-        function updateProgress(progress) {
-            const percentage = (progress.recorded / progress.total) * 100;
+        function loadPromptList() {
+            const promptListId = document.getElementById('promptList').value;
+            if (!currentProfileId || !promptListId) {
+                document.getElementById('currentPrompt').innerHTML = '<p class="mb-0">Please select a voice profile and prompt list to begin recording.</p>';
+                document.getElementById('recordButton').disabled = true;
+                document.getElementById('prevButton').disabled = true;
+                document.getElementById('nextButton').disabled = true;
+                return;
+            }
+
+            currentPromptListId = promptListId;
+            currentPromptIndex = 0;
+            recordedPrompts.clear();
+            
+            // Load all prompts for this list
+            fetch(`/api/load_prompts/${currentProfileId}/${promptListId}`)
+                .then(response => response.json())
+                .then(data => {
+                    allPrompts = data.prompts;
+                    loadCurrentPrompt();
+                    loadRecordedStatus();
+                })
+                .catch(error => console.error('Error loading prompt list:', error));
+        }
+
+        function loadCurrentPrompt() {
+            if (allPrompts.length === 0) {
+                document.getElementById('currentPrompt').innerHTML = '<p class="mb-0">No prompts available!</p>';
+                document.getElementById('recordButton').disabled = true;
+                document.getElementById('prevButton').disabled = true;
+                document.getElementById('nextButton').disabled = true;
+                return;
+            }
+
+            const prompt = allPrompts[currentPromptIndex];
+            currentPromptId = currentPromptIndex + 1;
+            currentPromptText = prompt;
+            
+            document.getElementById('currentPrompt').innerHTML = `
+                <h6>Prompt #${currentPromptId} of ${allPrompts.length}</h6>
+                <p class="mb-0 fs-5">${currentPromptText}</p>
+                <div class="mt-2">
+                    <span class="badge ${recordedPrompts.has(currentPromptIndex) ? 'bg-success' : 'bg-secondary'}">
+                        ${recordedPrompts.has(currentPromptIndex) ? '✓ Recorded' : 'Not recorded'}
+                    </span>
+                </div>
+            `;
+            
+            document.getElementById('recordButton').disabled = false;
+            document.getElementById('prevButton').disabled = currentPromptIndex === 0;
+            document.getElementById('nextButton').disabled = currentPromptIndex === allPrompts.length - 1;
+            
+            updateProgress();
+        }
+
+        function nextPrompt() {
+            if (currentPromptIndex < allPrompts.length - 1) {
+                currentPromptIndex++;
+                loadCurrentPrompt();
+            }
+        }
+
+        function previousPrompt() {
+            if (currentPromptIndex > 0) {
+                currentPromptIndex--;
+                loadCurrentPrompt();
+            }
+        }
+
+        function loadRecordedStatus() {
+            // Load which prompts have been recorded for this profile/prompt list
+            fetch(`/api/recorded_status/${currentProfileId}/${currentPromptListId}`)
+                .then(response => response.json())
+                .then(data => {
+                    recordedPrompts = new Set(data.recorded_indices || []);
+                    loadCurrentPrompt(); // Refresh display
+                })
+                .catch(error => console.error('Error loading recorded status:', error));
+        }
+
+        function updateProgress() {
+            const recorded = recordedPrompts.size;
+            const total = allPrompts.length;
+            const percentage = total > 0 ? (recorded / total) * 100 : 0;
             document.getElementById('recordingProgress').style.width = percentage + '%';
-            document.getElementById('progressText').textContent = `${progress.recorded} / ${progress.total} recorded`;
+            document.getElementById('progressText').textContent = `${recorded} / ${total} recorded`;
         }
 
         async function toggleRecording() {
@@ -244,6 +451,9 @@
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
 
+                // Setup audio visualization
+                setupAudioVisualization(stream);
+
                 mediaRecorder.ondataavailable = event => {
                     audioChunks.push(event.data);
                 };
@@ -254,6 +464,17 @@
                     document.getElementById('playbackAudio').src = audioUrl;
                     document.getElementById('audioPlayback').classList.remove('d-none');
                     document.getElementById('recordingStatus').classList.add('d-none');
+                    
+                    // Show clipping warning if any clipping occurred
+                    if (clippingCount > 0) {
+                        showClippingWarning();
+                    }
+                    
+                    // Stop audio visualization
+                    stopAudioVisualization();
+                    
+                    // Draw playback waveform
+                    drawPlaybackWaveform(audioBlob);
                 };
 
                 mediaRecorder.start();
@@ -264,6 +485,11 @@
                 document.getElementById('recordButton').classList.add('btn-danger');
                 document.getElementById('recordingStatus').classList.remove('d-none');
                 document.getElementById('audioPlayback').classList.add('d-none');
+                document.getElementById('inputLevelContainer').classList.remove('d-none');
+                document.getElementById('waveformContainer').classList.remove('d-none');
+                
+                // Reset clipping counter
+                clippingCount = 0;
             } catch (error) {
                 console.error('Error starting recording:', error);
                 alert('Error accessing microphone. Please check permissions.');
@@ -287,7 +513,10 @@
             const formData = new FormData();
             formData.append('audio', audioBlob, 'recording.wav');
             formData.append('prompt_id', currentPromptId);
-            formData.append('profile_id', document.getElementById('voiceProfile').value);
+            formData.append('prompt_index', currentPromptIndex);
+            formData.append('prompt_text', currentPromptText);
+            formData.append('profile_id', currentProfileId);
+            formData.append('prompt_list_id', currentPromptListId);
 
             fetch('/api/record', {
                 method: 'POST',
@@ -296,11 +525,16 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // Mark this prompt as recorded
+                    recordedPrompts.add(currentPromptIndex);
                     addToRecordingHistory(currentPromptText, data.duration);
                     document.getElementById('audioPlayback').classList.add('d-none');
                     
+                    // Update the current prompt display
+                    loadCurrentPrompt();
+                    
                     if (document.getElementById('autoAdvance').checked) {
-                        loadNextPrompt();
+                        nextPrompt();
                     }
                 } else {
                     alert('Error saving recording: ' + data.error);
@@ -318,7 +552,7 @@
         }
 
         function skipPrompt() {
-            loadNextPrompt();
+            nextPrompt();
         }
 
         function addToRecordingHistory(promptText, duration) {
@@ -343,6 +577,250 @@
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = Math.floor(seconds % 60);
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Audio visualization functions
+        function setupAudioVisualization(stream) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                microphone.connect(analyser);
+                
+                // Start visualization loop
+                drawVisualization();
+            } catch (error) {
+                console.error('Error setting up audio visualization:', error);
+            }
+        }
+
+        function drawVisualization() {
+            if (!analyser) return;
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Update input level indicator
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            const percentage = (average / 255) * 100;
+            const levelBar = document.getElementById('inputLevel');
+            levelBar.style.width = percentage + '%';
+            
+            // Check for clipping (values near maximum)
+            const maxValue = Math.max(...dataArray);
+            const clippingThreshold = 250; // Close to 255
+            const wasClipping = isClipping;
+            isClipping = maxValue > clippingThreshold;
+            
+            if (isClipping && !wasClipping) {
+                clippingCount++;
+            }
+            
+            // Color coding for input level and clipping indicator
+            if (isClipping) {
+                levelBar.className = 'progress-bar bg-danger';
+                document.getElementById('clippingIndicator').classList.remove('d-none');
+            } else if (percentage > 50) {
+                levelBar.className = 'progress-bar bg-warning';
+                document.getElementById('clippingIndicator').classList.add('d-none');
+            } else {
+                levelBar.className = 'progress-bar bg-success';
+                document.getElementById('clippingIndicator').classList.add('d-none');
+            }
+            
+            // Draw waveform
+            drawWaveform();
+            
+            if (isRecording) {
+                animationId = requestAnimationFrame(drawVisualization);
+            }
+        }
+
+        function drawWaveform() {
+            const canvas = document.getElementById('waveformCanvas');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Clear canvas
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw center line
+            ctx.strokeStyle = '#dee2e6';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, height / 2);
+            ctx.lineTo(width, height / 2);
+            ctx.stroke();
+            
+            // Draw waveform
+            ctx.strokeStyle = isClipping ? '#dc3545' : '#007bff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            const sliceWidth = width / dataArray.length;
+            let x = 0;
+            
+            for (let i = 0; i < dataArray.length; i++) {
+                const v = (dataArray[i] / 255.0) * 2 - 1; // Convert to -1 to 1 range
+                const y = (height / 2) + (v * height / 2);
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                x += sliceWidth;
+            }
+            
+            ctx.stroke();
+        }
+
+        function stopAudioVisualization() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            // Hide visualization elements
+            document.getElementById('inputLevelContainer').classList.add('d-none');
+            document.getElementById('waveformContainer').classList.add('d-none');
+        }
+
+        // Done recording function
+        function doneRecording() {
+            if (isRecording) {
+                alert('Please stop the current recording before finishing.');
+                return;
+            }
+            
+            const recordedCount = recordedPrompts.size;
+            const totalCount = allPrompts.length;
+            
+            if (recordedCount === 0) {
+                if (confirm('You haven\'t recorded any prompts yet. Are you sure you want to finish?')) {
+                    returnToMainPage();
+                }
+            } else {
+                const message = `You have recorded ${recordedCount} out of ${totalCount} prompts. Are you sure you want to finish recording?`;
+                if (confirm(message)) {
+                    returnToMainPage();
+                }
+            }
+        }
+
+        function returnToMainPage() {
+            // Clean up any active recordings
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+            
+            // Stop audio visualization
+            stopAudioVisualization();
+            
+            // Return to main page
+            window.location.href = '/';
+        }
+
+        function showClippingWarning() {
+            const warning = document.createElement('div');
+            warning.className = 'alert alert-warning alert-dismissible fade show mt-2';
+            warning.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Warning: Recording clipped ${clippingCount} times. Consider lowering your input volume.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.getElementById('audioPlayback').appendChild(warning);
+        }
+
+        function drawPlaybackWaveform(audioBlob) {
+            const canvas = document.getElementById('playbackWaveformCanvas');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Clear canvas
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw center line
+            ctx.strokeStyle = '#dee2e6';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, height / 2);
+            ctx.lineTo(width, height / 2);
+            ctx.stroke();
+            
+            // Create audio context for analysis
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const fileReader = new FileReader();
+            
+            fileReader.onload = function(e) {
+                audioContext.decodeAudioData(e.target.result).then(audioBuffer => {
+                    const channelData = audioBuffer.getChannelData(0);
+                    const samplesPerPixel = Math.floor(channelData.length / width);
+                    
+                    ctx.strokeStyle = '#28a745';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    
+                    for (let x = 0; x < width; x++) {
+                        const start = x * samplesPerPixel;
+                        const end = Math.min(start + samplesPerPixel, channelData.length);
+                        let sum = 0;
+                        
+                        for (let i = start; i < end; i++) {
+                            sum += Math.abs(channelData[i]);
+                        }
+                        
+                        const average = sum / (end - start);
+                        const y = (height / 2) - (average * height / 2);
+                        
+                        if (x === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    }
+                    
+                    ctx.stroke();
+                }).catch(error => {
+                    console.error('Error decoding audio for waveform:', error);
+                });
+            };
+            
+            fileReader.readAsArrayBuffer(audioBlob);
+        }
+
+        function openTargetFolder() {
+            if (!currentProfileId) {
+                alert('Please select a profile first.');
+                return;
+            }
+            
+            fetch(`/api/open_recordings_folder/${currentProfileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert('Error opening folder: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error opening folder:', error);
+                    alert('Error opening folder');
+                });
         }
     </script>
 
