@@ -13,13 +13,39 @@ A comprehensive web application for managing voice datasets with recording, orga
 
 ## Quick Start
 
-### Prerequisites
+### Self-Contained Setup (Recommended)
+
+This application is completely self-contained within the `coaxial_recorder` folder. All scripts use relative paths and work from any location.
+
+1. **Setup (First Time Only)**:
+   ```bash
+   ./setup_venv.sh
+   ```
+   This creates a virtual environment and installs all dependencies.
+
+2. **Launch Application**:
+   ```bash
+   ./launch.sh
+   ```
+   This activates the virtual environment and starts the web server.
+
+3. **Open your browser** and navigate to `http://localhost:8000/record`
+
+4. **Stop Application**:
+   ```bash
+   ./kill_app.sh
+   ```
+   This stops the application and frees up all ports.
+
+### Manual Setup (Alternative)
+
+#### Prerequisites
 
 - Python 3.7+
 - Modern web browser with Web Audio API support
 - Microphone access for recording
 
-### Installation
+#### Installation
 
 1. **Clone or download the project**:
    ```bash
@@ -172,6 +198,17 @@ Default audio settings are optimized for voice recording:
 - Recordings are stored in the `recordings/` directory
 - Voice profiles are stored in the `voices/` directory
 - Both can be configured in the application settings
+
+## Management Scripts
+
+The application includes several management scripts for easy operation:
+
+- **setup_venv.sh**: Creates virtual environment and installs dependencies
+- **activate_venv.sh**: Activates the virtual environment manually  
+- **launch.sh**: Activates environment and starts the application
+- **kill_app.sh**: Stops the application and cleans up ports
+
+All scripts use relative paths and can be run from any location within the project folder.
 
 ## Troubleshooting
 
