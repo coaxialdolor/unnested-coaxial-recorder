@@ -2,9 +2,11 @@
 venv/
 env/
 .venv/
+/.venv/
 
 # Python
 __pycache__/
+.mypy_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -38,6 +40,7 @@ MANIFEST
 *.temp
 .DS_Store
 Thumbs.db
+tmp/
 
 # IDE
 .idea/
@@ -49,6 +52,12 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Coverage
+htmlcov/
+
+# Output
+/output/
 
 # Voice data (uncomment if you want to exclude voice recordings)
 # voices/*/recordings/
