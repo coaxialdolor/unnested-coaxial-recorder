@@ -5,6 +5,8 @@ import os
 import json
 import shutil
 import requests
+import base64
+from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -32,7 +34,7 @@ class VoiceProfile(BaseModel):
     name: str
     description: Optional[str] = None
     language: Optional[str] = None
-    gender: Optional[str] = None
+    speaker_name: Optional[str] = None  # Changed from gender to match frontend
     
 class PromptList(BaseModel):
     name: str
@@ -64,22 +66,37 @@ async def get_profiles():
     profiles = []
     for profile_dir in VOICES_DIR.iterdir():
         if profile_dir.is_dir() and profile_dir.name != "example":
-            metadata_file = profile_dir / "metadata.jsonl"
+            profile_file = profile_dir / "profile.json"
             progress_file = profile_dir / "progress.json"
+            clips_dir = profile_dir / "clips"
             
-            # Get profile info
+            # Default profile info
             profile_info = {
+                "id": profile_dir.name,
                 "name": profile_dir.name,
-                "clips_count": len(list((profile_dir / "clips").glob("*.wav"))) if (profile_dir / "clips").exists() else 0,
-                "prompt_lists": [p.stem for p in (profile_dir / "prompts").glob("*.txt")] if (profile_dir / "prompts").exists() else []
+                "speaker_name": profile_dir.name,
+                "language": "en-US",
+                "description": "",
+                "recording_count": 0
             }
             
-            # Add progress info if available
-            if progress_file.exists():
-                with open(progress_file, "r") as f:
-                    progress = json.load(f)
-                    profile_info["progress"] = progress
-                    
+            # Load profile metadata if available
+            if profile_file.exists():
+                try:
+                    with open(profile_file, "r") as f:
+                        metadata = json.load(f)
+                        profile_info.update({
+                            "speaker_name": metadata.get("speaker_name", profile_dir.name),
+                            "language": metadata.get("language", "en-US"),
+                            "description": metadata.get("description", "")
+                        })
+                except:
+                    pass
+            
+            # Count recordings
+            if clips_dir.exists():
+                profile_info["recording_count"] = len(list(clips_dir.glob("*.wav")))
+            
             profiles.append(profile_info)
     
     return profiles
@@ -90,22 +107,42 @@ async def create_profile(profile: VoiceProfile):
     profile_dir = VOICES_DIR / profile.name
     
     if profile_dir.exists():
-        raise HTTPException(status_code=400, detail="Profile already exists")
+        return {"success": False, "error": "Profile already exists"}
     
-    # Create directory structure
-    profile_dir.mkdir()
-    (profile_dir / "clips").mkdir()
-    (profile_dir / "prompts").mkdir()
-    
-    # Create initial progress file
-    with open(profile_dir / "progress.json", "w") as f:
-        json.dump({}, f)
-    
-    # Create metadata file with profile info
-    with open(profile_dir / "metadata.jsonl", "w") as f:
-        f.write("")
-    
-    return {"message": f"Profile {profile.name} created successfully"}
+    try:
+        # Create directory structure
+        profile_dir.mkdir()
+        (profile_dir / "clips").mkdir()
+        (profile_dir / "prompts").mkdir()
+        
+        # Create profile metadata
+        profile_metadata = {
+            "name": profile.name,
+            "speaker_name": profile.speaker_name or profile.name,
+            "language": profile.language or "en-US",
+            "description": profile.description or "",
+            "created_at": "2024-01-01"  # Simplified for now
+        }
+        
+        # Save profile metadata
+        with open(profile_dir / "profile.json", "w") as f:
+            json.dump(profile_metadata, f)
+        
+        # Create initial progress file
+        with open(profile_dir / "progress.json", "w") as f:
+            json.dump({}, f)
+        
+        # Create metadata file for recordings
+        with open(profile_dir / "metadata.jsonl", "w") as f:
+            f.write("")
+        
+        return {"success": True, "message": f"Profile {profile.name} created successfully"}
+    except Exception as e:
+        # Clean up if creation failed
+        if profile_dir.exists():
+            import shutil
+            shutil.rmtree(profile_dir)
+        return {"success": False, "error": str(e)}
 
 @app.get("/profiles/{profile_name}", response_class=HTMLResponse)
 async def profile_page(request: Request, profile_name: str):
@@ -577,17 +614,39 @@ async def download_piper_prompt_list(language: str, category: str) -> list:
         "CommonPhrases": ["common_phrases"]
     }
     
-    base_prompts_dir = Path("/Users/petter/Desktop/untitled folder/piper-recording-studio/prompts")
-    language_dir = base_prompts_dir / f"{language}"
+    # Map language codes to directory names
+    language_mappings = {
+        "sv-SE": "Swedish (Sweden)_sv-SE",
+        "it-IT": "Italian (Italy)_it-IT",
+        "en-US": "English (United States)_en-US",
+        "en-GB": "English (United Kingdom)_en-GB",
+        "es-ES": "Spanish (Spain)_es-ES",
+        "fr-FR": "French (France)_fr-FR",
+        "de-DE": "German (Germany)_de-DE",
+        "pt-BR": "Portuguese (Brazil)_pt-BR",
+        "ja-JP": "Japanese (Japan)_ja-JP",
+        "ko-KR": "Korean (Korea)_ko-KR",
+        "zh-CN": "Chinese (Simplified)_zh-CN",
+        "zh-TW": "Chinese (Traditional)_zh-TW"
+    }
     
-    if not language_dir.exists():
+    base_prompts_dir = Path("/Users/petter/Desktop/untitled folder/piper-recording-studio/prompts")
+    
+    # Get the directory name for the language
+    dir_name = language_mappings.get(language)
+    if not dir_name:
         # Try to find a matching language directory
         for dir_path in base_prompts_dir.iterdir():
             if dir_path.is_dir() and language in dir_path.name:
-                language_dir = dir_path
+                dir_name = dir_path.name
                 break
         else:
             return []
+    
+    language_dir = base_prompts_dir / dir_name
+    
+    if not language_dir.exists():
+        return []
     
     prompts = []
     patterns = category_patterns.get(category, [category])
@@ -657,6 +716,134 @@ async def download_online_lm_dataset(language: str, category: str) -> list:
     
     # Return prompts for the requested language and category, or fallback to English General
     return sample_prompts.get(language, sample_prompts).get(category, sample_prompts["en-US"]["General"])
+
+# Get prompt lists for a specific profile
+@app.get("/api/profiles/{profile_name}/prompts")
+async def get_profile_prompts(profile_name: str):
+    """Get all prompt lists for a specific profile"""
+    profile_dir = VOICES_DIR / profile_name
+    
+    if not profile_dir.exists():
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    prompts_dir = profile_dir / "prompts"
+    if not prompts_dir.exists():
+        return []
+    
+    prompts = []
+    for prompt_file in prompts_dir.glob("*.txt"):
+        try:
+            with open(prompt_file, "r", encoding="utf-8") as f:
+                prompt_lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+                prompts.append({
+                    "id": f"{profile_name}_{prompt_file.stem}",
+                    "name": prompt_file.stem,
+                    "language": "en-US",  # Default, could be enhanced to detect from content
+                    "prompt_count": len(prompt_lines),
+                    "profile": profile_name
+                })
+        except Exception as e:
+            print(f"Error reading prompt file {prompt_file}: {e}")
+            continue
+    
+    return prompts
+
+# Get next prompt for recording
+@app.get("/api/next_prompt/{profile_name}/{prompt_list_id}")
+async def get_next_prompt(profile_name: str, prompt_list_id: str):
+    """Get the next prompt for recording"""
+    profile_dir = VOICES_DIR / profile_name
+    
+    if not profile_dir.exists():
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    # Parse prompt list name from ID (format: profile_name_prompt_name)
+    # Remove the profile_name prefix and first underscore
+    if not prompt_list_id.startswith(f"{profile_name}_"):
+        raise HTTPException(status_code=400, detail="Invalid prompt list ID format")
+    
+    prompt_name = prompt_list_id[len(profile_name) + 1:]
+    prompt_file = profile_dir / "prompts" / f"{prompt_name}"
+    
+    print(f"DEBUG: Looking for prompt file: {prompt_file}")
+    print(f"DEBUG: File exists: {prompt_file.exists()}")
+    print(f"DEBUG: Absolute path: {prompt_file.resolve()}")
+    print(f"DEBUG: Current working dir: {Path.cwd()}")
+    print(f"DEBUG: Profile dir: {profile_dir}")
+    print(f"DEBUG: Prompts dir: {profile_dir / 'prompts'}")
+    
+    if not prompt_file.exists():
+        raise HTTPException(status_code=404, detail="Prompt list not found")
+    
+    try:
+        with open(prompt_file, "r", encoding="utf-8") as f:
+            prompts = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+        
+        if not prompts:
+            raise HTTPException(status_code=404, detail="No prompts available")
+        
+        # For now, return the first prompt
+        # In a real implementation, you'd track which prompts have been recorded
+        return {
+            "id": 1,
+            "text": prompts[0],
+            "index": 0,
+            "total": len(prompts)
+        }
+    except Exception as e:
+        print(f"Error reading prompt file {prompt_file}: {e}")
+        raise HTTPException(status_code=500, detail="Error reading prompts")
+
+# Save recording
+@app.post("/api/record")
+async def save_recording(recording_data: dict):
+    """Save a recording"""
+    try:
+        profile_name = recording_data.get("profile")
+        prompt = recording_data.get("prompt")
+        audio_data = recording_data.get("audio")
+        
+        if not all([profile_name, prompt, audio_data]):
+            return {"success": False, "error": "Missing required fields"}
+        
+        profile_dir = VOICES_DIR / profile_name
+        if not profile_dir.exists():
+            return {"success": False, "error": "Profile not found"}
+        
+        recordings_dir = profile_dir / "recordings"
+        recordings_dir.mkdir(exist_ok=True)
+        
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        filename = f"{timestamp}_{safe_prompt}.wav"
+        
+        # Decode base64 audio data
+        audio_bytes = base64.b64decode(audio_data.split(',')[1])
+        
+        # Save audio file
+        audio_path = recordings_dir / filename
+        with open(audio_path, "wb") as f:
+            f.write(audio_bytes)
+        
+        # Update profile recording count
+        profile_file = profile_dir / "profile.json"
+        if profile_file.exists():
+            with open(profile_file, "r") as f:
+                profile_data = json.load(f)
+            profile_data["recording_count"] = profile_data.get("recording_count", 0) + 1
+            with open(profile_file, "w") as f:
+                json.dump(profile_data, f, indent=2)
+        
+        return {
+            "success": True,
+            "message": "Recording saved successfully",
+            "filename": filename,
+            "path": str(audio_path)
+        }
+    except Exception as e:
+        print(f"Error saving recording: {e}")
+        return {"success": False, "error": str(e)}
 
 # Get all available prompt lists
 @app.get("/api/prompts")
