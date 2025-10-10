@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 import uvicorn
 from pydantic import BaseModel
 from pathlib import Path
+import subprocess
 
 # Create FastAPI app
 app = FastAPI(title="Voice Dataset Manager")
@@ -28,6 +29,62 @@ templates = Jinja2Templates(directory="templates")
 # Define base paths
 VOICES_DIR = Path("voices")
 VOICES_DIR.mkdir(exist_ok=True)
+
+# Global prompts directory at root
+PROMPTS_DIR = Path("prompts")
+PROMPTS_DIR.mkdir(exist_ok=True)
+
+OFFLINE_LANG_DIR_MAP = {
+    "en-US": "English (United States)_en-US",
+    "en-GB": "English (United Kingdom)_en-GB",
+    "sv-SE": "Swedish (Sweden)_sv-SE",
+    "it-IT": "Italian (Italy)_it-IT",
+}
+
+def seed_offline_prompts(profile_dir: Path, language_code: str) -> int:
+    """Copy up to three default prompt lists into profile/prompts for supported languages.
+    Returns number of lists copied.
+    """
+    try:
+        src_lang_dir_name = OFFLINE_LANG_DIR_MAP.get(language_code)
+        if not src_lang_dir_name:
+            return 0
+        repo_prompts_dir = PROMPTS_DIR / src_lang_dir_name
+        if not repo_prompts_dir.exists():
+            return 0
+        prompts_dir = profile_dir / "prompts"
+        prompts_dir.mkdir(exist_ok=True)
+
+        standard_patterns = [
+            "General",
+            "Chat",
+            "CustomerService",
+            "0000000001",
+            "3000000001",
+            "4000000001",
+        ]
+        copied = 0
+        for pattern in standard_patterns:
+            for txt_file in repo_prompts_dir.glob(f"*{pattern}*.txt"):
+                try:
+                    # Prefix filenames with language code so multiple languages can coexist clearly
+                    dest_path = prompts_dir / f"{language_code}_{txt_file.stem}.txt"
+                    if not dest_path.exists():
+                        with open(txt_file, "r", encoding="utf-8") as src, open(dest_path, "w", encoding="utf-8") as dst:
+                            for line in src:
+                                if line.strip() and not line.startswith("#"):
+                                    dst.write(line if line.endswith("\n") else line + "\n")
+                        copied += 1
+                except Exception as e:
+                    print(f"Seed copy error {txt_file}: {e}")
+                if copied >= 3:
+                    break
+            if copied >= 3:
+                break
+        return copied
+    except Exception as e:
+        print(f"Error seeding default prompts for {profile_dir.name}: {e}")
+        return 0
 
 # Define data models
 class VoiceProfile(BaseModel):
@@ -136,6 +193,10 @@ async def create_profile(profile: VoiceProfile):
         with open(profile_dir / "metadata.jsonl", "w") as f:
             f.write("")
         
+        # Always seed all four supported languages for every profile
+        for lang_code in ["en-US", "en-GB", "sv-SE", "it-IT"]:
+            seed_offline_prompts(profile_dir, lang_code)
+
         return {"success": True, "message": f"Profile {profile.name} created successfully"}
     except Exception as e:
         # Clean up if creation failed
@@ -179,7 +240,7 @@ async def record_page(request: Request, profile_name: str, prompt_list: str):
         raise HTTPException(status_code=404, detail="Prompt list not found")
     
     # Get sentences
-    with open(prompt_file, "r") as f:
+    with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
         sentences = [line.strip() for line in f if line.strip()]
     
     # Get progress
@@ -260,7 +321,7 @@ async def save_recording(
         # Get total sentences in prompt list
         prompt_file = profile_dir / "prompts" / f"{prompt_list}.txt"
         if prompt_file.exists():
-            with open(prompt_file, "r") as f:
+            with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
                 sentences = [line.strip() for line in f if line.strip()]
                 total = len(sentences)
         else:
@@ -360,7 +421,7 @@ async def get_prompt_list(prompt_list: str):
                 prompt_file = prompts_dir / f"{prompt_list}.txt"
                 if prompt_file.exists():
                     try:
-                        with open(prompt_file, "r") as f:
+                        with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
                             prompts = [line.strip() for line in f if line.strip()]
                         return {"prompts": prompts, "profile": profile_dir.name, "name": prompt_list}
                     except Exception:
@@ -578,7 +639,7 @@ async def download_prompt_list(
     prompts = []
     
     if source == "piper":
-        # Download from piper_recording_studio wordlists
+        # Load from local repo prompts directory
         prompts = await download_piper_prompt_list(language, category)
     elif source == "online":
         # Download from online LM dataset
@@ -590,7 +651,7 @@ async def download_prompt_list(
         raise HTTPException(status_code=404, detail=f"No prompts found for {language} - {category}")
     
     # Save the downloaded prompts
-    with open(file_path, "w") as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         for prompt in prompts:
             f.write(prompt + "\n")
     
@@ -604,7 +665,9 @@ async def download_prompt_list(
     }
 
 async def download_piper_prompt_list(language: str, category: str) -> list:
-    """Download prompts from piper_recording_studio wordlists"""
+    """Fetch prompts from local 'prompts' directory mirroring piper-recording-studio structure.
+    If files are present locally, load from disk. Otherwise, return empty list (UI can present link).
+    """
     # Map category names to file patterns
     category_patterns = {
         "General": ["General", "0000000001"],
@@ -630,7 +693,7 @@ async def download_piper_prompt_list(language: str, category: str) -> list:
         "zh-TW": "Chinese (Traditional)_zh-TW"
     }
     
-    base_prompts_dir = Path("/Users/petter/Desktop/untitled folder/piper-recording-studio/prompts")
+    base_prompts_dir = PROMPTS_DIR
     
     # Get the directory name for the language
     dir_name = language_mappings.get(language)
@@ -662,7 +725,7 @@ async def download_piper_prompt_list(language: str, category: str) -> list:
                 print(f"Error reading {txt_file}: {e}")
                 continue
     
-    return prompts[:100]  # Limit to first 100 prompts
+    return prompts  # Return full list
 
 async def download_online_lm_dataset(language: str, category: str) -> list:
     """Download prompts from online LM dataset"""
@@ -733,21 +796,53 @@ async def get_profile_prompts(profile_name: str):
     prompts = []
     for prompt_file in prompts_dir.glob("*.txt"):
         try:
-            with open(prompt_file, "r", encoding="utf-8") as f:
-                prompt_lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-                prompts.append({
-                    "id": f"{profile_name}_{prompt_file.stem}",
-                    "name": prompt_file.stem,
-                    "language": "en-US",  # Default, could be enhanced to detect from content
-                    "prompt_count": len(prompt_lines),
-                    "profile": profile_name
-                })
+                        with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
+                            prompt_lines = []
+                            for line in f:
+                                line = line.strip()
+                                if line and not line.startswith("#"):
+                                    # Handle tab-separated format: take the text part after the tab
+                                    if '\t' in line:
+                                        text_part = line.split('\t', 1)[1].strip()
+                                        if text_part:  # Only count if there's actual text content
+                                            prompt_lines.append(text_part)
+                                    else:
+                                        prompt_lines.append(line)
+                            prompts.append({
+                                "id": f"{profile_name}_{prompt_file.stem}",
+                                "name": prompt_file.stem,
+                                "language": "en-US",  # Default, could be enhanced to detect from content
+                                "prompt_count": len(prompt_lines),
+                                "profile": profile_name
+                            })
         except Exception as e:
             print(f"Error reading prompt file {prompt_file}: {e}")
             continue
     
     return prompts
 
+# Helper endpoint to open prompt file folder in OS explorer
+@app.get("/api/open_prompt_folder/{profile_name}/{prompt_name}")
+async def open_prompt_folder(profile_name: str, prompt_name: str):
+    profile_dir = VOICES_DIR / profile_name
+    prompt_file = profile_dir / "prompts" / f"{prompt_name}.txt"
+    if not prompt_file.exists():
+        return {"success": False}
+    folder = str(prompt_file.parent.resolve())
+    try:
+        # Windows explorer
+        if os.name == "nt":
+            subprocess.Popen(["explorer", folder])
+        else:
+            # macOS
+            if os.system("uname") == 0:
+                subprocess.Popen(["open", folder])
+            else:
+                # Linux
+                subprocess.Popen(["xdg-open", folder])
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 # Get next prompt for recording
 @app.get("/api/next_prompt/{profile_name}/{prompt_list_id}")
 async def get_next_prompt(profile_name: str, prompt_list_id: str):
@@ -771,8 +866,18 @@ async def get_next_prompt(profile_name: str, prompt_list_id: str):
         raise HTTPException(status_code=404, detail="Prompt list not found")
     
     try:
-        with open(prompt_file, "r", encoding="utf-8") as f:
-            prompts = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+        with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
+            prompts = []
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    # Handle tab-separated format: take the text part after the tab
+                    if '\t' in line:
+                        text_part = line.split('\t', 1)[1].strip()
+                        if text_part:  # Only count if there's actual text content
+                            prompts.append(text_part)
+                    else:
+                        prompts.append(line)
         
         if not prompts:
             raise HTTPException(status_code=404, detail="No prompts available")
@@ -780,10 +885,16 @@ async def get_next_prompt(profile_name: str, prompt_list_id: str):
         # For now, return the first prompt
         # In a real implementation, you'd track which prompts have been recorded
         return {
-            "id": 1,
-            "text": prompts[0],
-            "index": 0,
-            "total": len(prompts)
+            "prompt": {
+                "id": 1,
+                "text": prompts[0],
+                "index": 0,
+                "total": len(prompts)
+            },
+            "progress": {
+                "recorded": 0,
+                "total": len(prompts)
+            }
         }
     except Exception as e:
         print(f"Error reading prompt file {prompt_file}: {e}")
@@ -830,13 +941,23 @@ async def get_all_prompts():
     
     # Scan all profiles and their prompts directories
     for profile_dir in VOICES_DIR.iterdir():
-        if profile_dir.is_dir() and profile_dir.name != "__pycache__":
+        if profile_dir.is_dir() and profile_dir.name not in ("__pycache__", "example"):
             prompts_dir = profile_dir / "prompts"
             if prompts_dir.exists():
                 for prompt_file in prompts_dir.glob("*.txt"):
                     try:
-                        with open(prompt_file, "r", encoding="utf-8") as f:
-                            prompt_lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+                        with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
+                            prompt_lines = []
+                            for line in f:
+                                line = line.strip()
+                                if line and not line.startswith("#"):
+                                    # Handle tab-separated format: take the text part after the tab
+                                    if '\t' in line:
+                                        text_part = line.split('\t', 1)[1].strip()
+                                        if text_part:  # Only count if there's actual text content
+                                            prompt_lines.append(text_part)
+                                    else:
+                                        prompt_lines.append(line)
                             prompts.append({
                                 "id": f"{profile_dir.name}_{prompt_file.stem}",
                                 "name": prompt_file.stem,
@@ -904,7 +1025,8 @@ async def delete_prompt_list(prompt_id: str):
 @app.get("/api/prompt-sources")
 async def get_prompt_sources():
     """Get available prompt sources and languages"""
-    base_prompts_dir = Path("/Users/petter/Desktop/untitled folder/piper-recording-studio/prompts")
+    # Use local repository prompts directory
+    base_prompts_dir = PROMPTS_DIR
     
     # Scan available languages in piper_recording_studio
     piper_languages = []
@@ -930,30 +1052,13 @@ async def get_prompt_sources():
         "sources": [
             {
                 "id": "piper",
-                "name": "Piper Recording Studio Wordlists",
-                "description": "Local wordlists from piper_recording_studio",
+                "name": "Piper Recording Studio Wordlists (Local)",
+                "description": "Local wordlists bundled or added to this repo",
                 "languages": piper_languages,
                 "categories": ["General", "Chat", "CustomerService", "Numbers", "CommonPhrases"]
-            },
-            {
-                "id": "online", 
-                "name": "Online LM Dataset",
-                "description": "Download from online language model datasets",
-                "languages": [
-                    {"code": "en-US", "display": "English (US)"},
-                    {"code": "en-GB", "display": "English (UK)"},
-                    {"code": "es-ES", "display": "Spanish (Spain)"},
-                    {"code": "fr-FR", "display": "French (France)"},
-                    {"code": "de-DE", "display": "German (Germany)"},
-                    {"code": "it-IT", "display": "Italian (Italy)"},
-                    {"code": "pt-BR", "display": "Portuguese (Brazil)"},
-                    {"code": "ja-JP", "display": "Japanese (Japan)"},
-                    {"code": "ko-KR", "display": "Korean (Korea)"},
-                    {"code": "zh-CN", "display": "Chinese (Simplified)"}
-                ],
-                "categories": ["General", "Chat", "CustomerService"]
             }
-        ]
+        ],
+        "github_prompts_url": "https://github.com/rhasspy/piper-recording-studio/tree/master/prompts"
     }
 
 # Export routes
@@ -991,6 +1096,23 @@ async def export_profile(profile_name: str):
 async def profiles_page(request: Request):
     """Serve the profiles management page."""
     try:
+        # Backfill: ensure existing profiles have offline prompts for supported languages
+        for profile_dir in VOICES_DIR.iterdir():
+            if profile_dir.is_dir() and profile_dir.name not in ("example", "__pycache__"):
+                # Try to read profile language
+                lang = "en-US"
+                profile_file = profile_dir / "profile.json"
+                if profile_file.exists():
+                    try:
+                        with open(profile_file, "r", encoding="utf-8") as f:
+                            meta = json.load(f)
+                            lang = meta.get("language", lang)
+                    except Exception:
+                        pass
+                # Always seed all four supported languages for every profile
+                for lang_code in ["en-US", "en-GB", "sv-SE", "it-IT"]:
+                    seed_offline_prompts(profile_dir, lang_code)
+
         profiles = await get_profiles()
         return templates.TemplateResponse("profiles.html", {
             "request": request,

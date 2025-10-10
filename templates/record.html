@@ -176,7 +176,15 @@
                     data.forEach(prompt => {
                         const option = document.createElement('option');
                         option.value = prompt.id;
-                        option.textContent = prompt.name;
+                        // Show language and prompt count in the dropdown
+                        const language = prompt.name.startsWith('en-US_') ? '🇺🇸' : 
+                                       prompt.name.startsWith('en-GB_') ? '🇬🇧' : 
+                                       prompt.name.startsWith('sv-SE_') ? '🇸🇪' : 
+                                       prompt.name.startsWith('it-IT_') ? '🇮🇹' : '';
+                        const category = prompt.name.includes('General') ? 'General' :
+                                       prompt.name.includes('Chat') ? 'Chat' :
+                                       prompt.name.includes('CustomerService') ? 'Customer Service' : '';
+                        option.textContent = `${language} ${category} (${prompt.prompt_count} prompts)`;
                         select.appendChild(option);
                     });
                 })

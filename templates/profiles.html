@@ -59,7 +59,7 @@
             </div>
         </div>
 
-        <div class="row mt-4">
+        <div class="row mt-4" id="downloadSection">
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
@@ -72,6 +72,7 @@
                                 <i class="fas fa-upload me-2"></i>Upload Prompts
                             </button>
                         </div>
+                        <!-- Download UI removed: prompts are bundled and auto-installed -->
                         <div id="promptsList" class="list-group">
                             <div class="text-center text-muted">
                                 <i class="fas fa-info-circle me-2"></i>No prompt lists available
@@ -187,6 +188,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadProfiles();
             loadPrompts();
+                // Download UI removed
         });
 
         function loadProfiles() {
@@ -246,8 +248,8 @@
                             </div>
                             <p class="mb-1">Language: ${prompt.language}</p>
                             <div class="btn-group btn-group-sm mt-2" role="group">
-                                <button class="btn btn-outline-primary" onclick="downloadPrompts('${prompt.id}')">
-                                    <i class="fas fa-download me-1"></i>Download
+                                <button class="btn btn-outline-primary" onclick="openPromptInExplorer('${prompt.profile}','${prompt.name}')">
+                                    <i class="fas fa-folder-open me-1"></i>Open Folder
                                 </button>
                                 <button class="btn btn-outline-danger" onclick="deletePrompts('${prompt.id}')">
                                     <i class="fas fa-trash me-1"></i>Delete
@@ -258,6 +260,8 @@
                 })
                 .catch(error => console.error('Error loading prompts:', error));
         }
+
+        // Download UI removed
 
         function createProfile() {
             const form = document.getElementById('createProfileForm');
@@ -362,8 +366,9 @@
             }
         }
 
-        function downloadPrompts(promptId) {
-            window.location.href = `/api/download_prompts/${promptId}`;
+        function openPromptInExplorer(profileId, promptName) {
+            fetch(`/api/open_prompt_folder/${encodeURIComponent(profileId)}/${encodeURIComponent(promptName)}`)
+                .catch(() => {});
         }
 
         function deletePrompts(promptId) {
