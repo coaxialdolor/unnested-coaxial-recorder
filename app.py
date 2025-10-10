@@ -482,12 +482,12 @@ async def delete_profile(profile_name: str):
     profile_dir = VOICES_DIR / profile_name
     
     if not profile_dir.exists():
-        raise HTTPException(status_code=404, detail="Profile not found")
+        return {"success": False, "error": "Profile not found"}
     
     # Delete the entire profile directory
     shutil.rmtree(profile_dir)
     
-    return {"message": f"Profile {profile_name} deleted successfully"}
+    return {"success": True, "message": f"Profile {profile_name} deleted successfully"}
 
 @app.post("/api/profiles/{profile_name}/prompts")
 async def upload_prompt_list(
