@@ -763,14 +763,9 @@ async def get_next_prompt(profile_name: str, prompt_list_id: str):
         raise HTTPException(status_code=400, detail="Invalid prompt list ID format")
     
     prompt_name = prompt_list_id[len(profile_name) + 1:]
-    prompt_file = profile_dir / "prompts" / f"{prompt_name}"
+    prompt_file = profile_dir / "prompts" / f"{prompt_name}.txt"
     
-    print(f"DEBUG: Looking for prompt file: {prompt_file}")
-    print(f"DEBUG: File exists: {prompt_file.exists()}")
-    print(f"DEBUG: Absolute path: {prompt_file.resolve()}")
-    print(f"DEBUG: Current working dir: {Path.cwd()}")
-    print(f"DEBUG: Profile dir: {profile_dir}")
-    print(f"DEBUG: Prompts dir: {profile_dir / 'prompts'}")
+
     
     if not prompt_file.exists():
         raise HTTPException(status_code=404, detail="Prompt list not found")
@@ -796,54 +791,36 @@ async def get_next_prompt(profile_name: str, prompt_list_id: str):
 
 # Save recording
 @app.post("/api/record")
-async def save_recording(recording_data: dict):
+async def save_recording(
+    audio: UploadFile = File(...),
+    prompt_id: int = Form(...),
+    profile_id: str = Form(...)
+):
     """Save a recording"""
     try:
-        profile_name = recording_data.get("profile")
-        prompt = recording_data.get("prompt")
-        audio_data = recording_data.get("audio")
-        
-        if not all([profile_name, prompt, audio_data]):
-            return {"success": False, "error": "Missing required fields"}
-        
-        profile_dir = VOICES_DIR / profile_name
-        if not profile_dir.exists():
-            return {"success": False, "error": "Profile not found"}
-        
+        # Create recordings directory for the profile
+        profile_dir = VOICES_DIR / profile_id
         recordings_dir = profile_dir / "recordings"
         recordings_dir.mkdir(exist_ok=True)
         
-        # Generate filename
+        # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        filename = f"{timestamp}_{safe_prompt}.wav"
+        filename = f"{prompt_id}_{timestamp}.wav"
+        file_path = recordings_dir / filename
         
-        # Decode base64 audio data
-        audio_bytes = base64.b64decode(audio_data.split(',')[1])
+        # Save the audio file
+        contents = await audio.read()
+        with open(file_path, 'wb') as f:
+            f.write(contents)
         
-        # Save audio file
-        audio_path = recordings_dir / filename
-        with open(audio_path, "wb") as f:
-            f.write(audio_bytes)
+        # Calculate duration (this is a simple approximation)
+        # In a real implementation, you'd use an audio library to get actual duration
+        duration = len(contents) / 44100 / 2  # Rough estimate for 44.1kHz 16-bit audio
         
-        # Update profile recording count
-        profile_file = profile_dir / "profile.json"
-        if profile_file.exists():
-            with open(profile_file, "r") as f:
-                profile_data = json.load(f)
-            profile_data["recording_count"] = profile_data.get("recording_count", 0) + 1
-            with open(profile_file, "w") as f:
-                json.dump(profile_data, f, indent=2)
+        return JSONResponse({"success": True, "duration": duration})
         
-        return {
-            "success": True,
-            "message": "Recording saved successfully",
-            "filename": filename,
-            "path": str(audio_path)
-        }
     except Exception as e:
-        print(f"Error saving recording: {e}")
-        return {"success": False, "error": str(e)}
+        return JSONResponse({"success": False, "error": str(e)})
 
 # Get all available prompt lists
 @app.get("/api/prompts")
