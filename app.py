@@ -909,11 +909,11 @@ async def load_prompts(profile_name: str, prompt_list_id: str):
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
     
-    # Parse prompt list name from ID (format: profile_name_prompt_name)
-    if not prompt_list_id.startswith(f"{profile_name}_"):
-        raise HTTPException(status_code=400, detail="Invalid prompt list ID format")
-    
-    prompt_name = prompt_list_id[len(profile_name) + 1:]
+    # Parse prompt list name from ID - handle both formats
+    if prompt_list_id.startswith(f"{profile_name}_"):
+        prompt_name = prompt_list_id[len(profile_name) + 1:]
+    else:
+        prompt_name = prompt_list_id
     prompt_file = profile_dir / "prompts" / f"{prompt_name}.txt"
     
     if not prompt_file.exists():
@@ -941,23 +941,24 @@ async def load_prompts(profile_name: str, prompt_list_id: str):
 # Get recorded status for a prompt list
 @app.get("/api/recorded_status/{profile_name}/{prompt_list_id}")
 async def get_recorded_status(profile_name: str, prompt_list_id: str):
-    """Get which prompts have been recorded for a specific prompt list"""
+    """Get which prompts have been recorded for a specific prompt list - only if files actually exist"""
     profile_dir = VOICES_DIR / profile_name
+    recordings_dir = profile_dir / "recordings"
     
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
     
-    # Parse prompt list name from ID
-    if not prompt_list_id.startswith(f"{profile_name}_"):
-        raise HTTPException(status_code=400, detail="Invalid prompt list ID format")
-    
-    prompt_name = prompt_list_id[len(profile_name) + 1:]
+    # Parse prompt list name from ID - handle both formats
+    if prompt_list_id.startswith(f"{profile_name}_"):
+        prompt_name = prompt_list_id[len(profile_name) + 1:]
+    else:
+        prompt_name = prompt_list_id
     
     # Check metadata file for recorded prompts
     metadata_file = profile_dir / "metadata.jsonl"
     recorded_indices = []
     
-    if metadata_file.exists():
+    if metadata_file.exists() and recordings_dir.exists():
         try:
             with open(metadata_file, "r", encoding="utf-8") as f:
                 for line in f:
@@ -965,12 +966,15 @@ async def get_recorded_status(profile_name: str, prompt_list_id: str):
                         try:
                             metadata = json.loads(line.strip())
                             if metadata.get("prompt_list") == prompt_name:
-                                # Extract index from filename or metadata
-                                filename = metadata.get("filename", "")
-                                if "_" in filename:
-                                    parts = filename.split("_")
-                                    if len(parts) >= 2 and parts[1].isdigit():
-                                        recorded_indices.append(int(parts[1]))
+                                # Use prompt_index from metadata directly
+                                prompt_idx = metadata.get("prompt_index")
+                                filename = metadata.get("filename")
+                                
+                                # CRITICAL: Only count as recorded if the actual file exists
+                                if prompt_idx is not None and filename:
+                                    file_path = recordings_dir / filename
+                                    if file_path.exists():
+                                        recorded_indices.append(prompt_idx)
                         except json.JSONDecodeError:
                             continue
         except Exception as e:
@@ -980,8 +984,8 @@ async def get_recorded_status(profile_name: str, prompt_list_id: str):
 
 # Get recording statistics for a profile
 @app.get("/api/recording_stats/{profile_name}")
-async def get_recording_stats(profile_name: str):
-    """Get recording statistics for all prompt lists in a profile"""
+async def get_recording_stats(profile_name: str, selected_language: str = None):
+    """Get recording statistics for prompt lists in a profile"""
     profile_dir = VOICES_DIR / profile_name
     
     if not profile_dir.exists():
@@ -989,6 +993,7 @@ async def get_recording_stats(profile_name: str):
     
     stats = []
     metadata_file = profile_dir / "metadata.jsonl"
+    recordings_dir = profile_dir / "recordings"
     
     # Get all prompt files in the profile
     prompts_dir = profile_dir / "prompts"
@@ -1014,24 +1019,35 @@ async def get_recording_stats(profile_name: str):
                 print(f"Error reading prompt file {prompt_file}: {e}")
                 total_prompts = 0
             
-            # Count recorded prompts from metadata
+            # Count recorded prompts by scanning actual files
             recorded_count = 0
-            if metadata_file.exists():
-                try:
-                    with open(metadata_file, "r", encoding="utf-8") as f:
-                        for line in f:
-                            if line.strip():
-                                try:
-                                    metadata = json.loads(line.strip())
-                                    if metadata.get("prompt_list") == prompt_name:
-                                        recorded_count += 1
-                                except json.JSONDecodeError:
-                                    continue
-                except Exception as e:
-                    print(f"Error reading metadata file: {e}")
+            if recordings_dir.exists() and metadata_file.exists():
+                # Get all files for this prompt list from metadata
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip():
+                            try:
+                                metadata = json.loads(line.strip())
+                                if metadata.get("prompt_list") == prompt_name:
+                                    filename = metadata.get("filename")
+                                    if filename:
+                                        file_path = recordings_dir / filename
+                                        # Only count if the actual file exists
+                                        if file_path.exists():
+                                            recorded_count += 1
+                            except json.JSONDecodeError:
+                                continue
             
-            # Only include if there are recordings or if it's a standard language
-            if recorded_count > 0 or language_code in ["en-US", "en-GB", "sv-SE", "it-IT"]:
+            # Only include if:
+            # 1. It's the selected language, OR
+            # 2. It has existing recordings
+            should_include = False
+            if selected_language and language_code == selected_language:
+                should_include = True
+            elif recorded_count > 0:
+                should_include = True
+            
+            if should_include:
                 stats.append({
                     "language_code": language_code,
                     "prompt_list": prompt_name,
@@ -1059,7 +1075,7 @@ async def open_recordings_folder(profile_name: str):
         
         system = platform.system()
         if system == "Windows":
-            subprocess.Popen(f'explorer "{recordings_dir}"')
+            subprocess.Popen(['explorer', str(recordings_dir)], shell=False)
         elif system == "Darwin":  # macOS
             subprocess.Popen(["open", str(recordings_dir)])
         else:  # Linux
@@ -1086,15 +1102,37 @@ async def save_recording(
         recordings_dir = profile_dir / "recordings"
         recordings_dir.mkdir(exist_ok=True)
         
-        # Parse prompt list name from ID
-        if not prompt_list_id.startswith(f"{profile_id}_"):
-            return JSONResponse({"success": False, "error": "Invalid prompt list ID format"})
+        # Parse prompt list name from ID - handle both formats
+        if prompt_list_id.startswith(f"{profile_id}_"):
+            prompt_list_name = prompt_list_id[len(profile_id) + 1:]
+        else:
+            prompt_list_name = prompt_list_id
         
-        prompt_list_name = prompt_list_id[len(profile_id) + 1:]
+        # Extract prompt ID from prompt file to get actual prompt number
+        prompt_file = profile_dir / "prompts" / f"{prompt_list_name}.txt"
+        prompt_number = f"{prompt_index+1:05d}"  # Default to 1-based numbering
         
-        # Generate filename with prompt index and timestamp
+        if prompt_file.exists():
+            try:
+                with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
+                    lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                    if prompt_index < len(lines):
+                        line = lines[prompt_index]
+                        if '\t' in line:
+                            prompt_number = line.split('\t')[0].strip()
+                        else:
+                            prompt_number = f"{prompt_index+1:05d}"
+            except Exception as e:
+                print(f"Error reading prompt file for naming: {e}")
+        
+        # Extract language and category from prompt_list_name
+        parts = prompt_list_name.split('_')
+        language_code = parts[0]  # e.g., sv-SE
+        category = parts[-1]  # e.g., General
+        
+        # Generate filename with prompt number first
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{prompt_list_name}_{prompt_index:04d}_{timestamp}.wav"
+        filename = f"{prompt_number}_{language_code}_{category}_{timestamp}.wav"
         file_path = recordings_dir / filename
         
         # Save the audio file
@@ -1122,6 +1160,114 @@ async def save_recording(
         
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
+
+# Get recording history for a profile
+@app.get("/api/recording_history/{profile_name}")
+async def get_recording_history(profile_name: str, limit: int = 10, offset: int = 0):
+    """Get recent recordings for a profile by scanning actual files"""
+    profile_dir = VOICES_DIR / profile_name
+    recordings_dir = profile_dir / "recordings"
+    metadata_file = profile_dir / "metadata.jsonl"
+    
+    if not recordings_dir.exists():
+        return []
+    
+    # Get all recording files and their metadata
+    recordings = []
+    
+    # Create a lookup for metadata by filename
+    metadata_lookup = {}
+    if metadata_file.exists():
+        with open(metadata_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        metadata = json.loads(line.strip())
+                        filename = metadata.get("filename")
+                        if filename:
+                            metadata_lookup[filename] = metadata
+                    except json.JSONDecodeError:
+                        continue
+    
+    # Scan actual files in recordings directory
+    for file_path in recordings_dir.glob("*.wav"):
+        filename = file_path.name
+        file_stat = file_path.stat()
+        
+        # Get metadata if available, otherwise create basic info
+        if filename in metadata_lookup:
+            recording_info = metadata_lookup[filename].copy()
+        else:
+            # Extract basic info from filename if no metadata
+            parts = filename.split('_')
+            if len(parts) >= 4:
+                prompt_number = parts[0]
+                language_code = parts[1]
+                category = parts[2]
+                timestamp = parts[3].replace('.wav', '')
+                recording_info = {
+                    "filename": filename,
+                    "sentence": f"Recording {prompt_number}",
+                    "prompt_list": f"{language_code}_{category}",
+                    "timestamp": timestamp
+                }
+            else:
+                recording_info = {
+                    "filename": filename,
+                    "sentence": "Unknown recording",
+                    "prompt_list": "unknown",
+                    "timestamp": "unknown"
+                }
+        
+        # Add file modification time for sorting
+        recording_info["file_mtime"] = file_stat.st_mtime
+        recordings.append(recording_info)
+    
+    # Sort by file modification time, newest first
+    recordings.sort(key=lambda x: x.get("file_mtime", 0), reverse=True)
+    
+    # Return paginated results
+    return recordings[offset:offset+limit]
+
+# Serve a recording file
+@app.get("/api/recording/{profile_name}/{filename}")
+async def get_recording(profile_name: str, filename: str):
+    """Serve a recording file"""
+    from fastapi.responses import FileResponse
+    file_path = VOICES_DIR / profile_name / "recordings" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Recording not found")
+    return FileResponse(file_path)
+
+# Get recording for a specific prompt
+@app.get("/api/get_recording_for_prompt/{profile_name}/{prompt_list_id}/{prompt_index}")
+async def get_recording_for_prompt(profile_name: str, prompt_list_id: str, prompt_index: int):
+    """Get the recording filename for a specific prompt - only if file actually exists"""
+    profile_dir = VOICES_DIR / profile_name
+    recordings_dir = profile_dir / "recordings"
+    metadata_file = profile_dir / "metadata.jsonl"
+    
+    # Parse prompt list name
+    if prompt_list_id.startswith(f"{profile_name}_"):
+        prompt_name = prompt_list_id[len(profile_name) + 1:]
+    else:
+        prompt_name = prompt_list_id
+    
+    if metadata_file.exists() and recordings_dir.exists():
+        with open(metadata_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    metadata = json.loads(line.strip())
+                    if (metadata.get("prompt_list") == prompt_name and 
+                        metadata.get("prompt_index") == prompt_index):
+                        filename = metadata.get("filename")
+                        if filename:
+                            file_path = recordings_dir / filename
+                            # Only return filename if the actual file exists
+                            if file_path.exists():
+                                return {"filename": filename}
+    
+    return {"filename": None}
 
 # Get all available prompt lists
 @app.get("/api/prompts")

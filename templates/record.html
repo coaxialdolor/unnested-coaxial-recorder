@@ -83,6 +83,16 @@
                         <div class="text-center">
                             <span id="progressText">0 / 0 recorded</span>
                         </div>
+                        
+                        <!-- Recording Statistics -->
+                        <div class="mt-3">
+                            <h6 class="mb-2">Recording Statistics</h6>
+                            <div id="recordingStats">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>Select a profile to view statistics
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -130,16 +140,12 @@
                         <!-- Waveform Visualization -->
                         <div id="waveformContainer" class="d-none mb-3">
                             <label class="form-label">Recording Waveform</label>
-                            <canvas id="waveformCanvas" width="400" height="100" class="border rounded"></canvas>
+                            <canvas id="waveformCanvas" class="border rounded w-100" style="max-width: 100%; height: 100px;"></canvas>
                         </div>
 
                         <div id="audioPlayback" class="mt-3 d-none">
                             <h6>Playback:</h6>
-                            <audio id="playbackAudio" controls class="w-100"></audio>
-                            <!-- Playback Waveform -->
-                            <div id="playbackWaveformContainer" class="mt-2">
-                                <canvas id="playbackWaveformCanvas" width="400" height="60" class="border rounded"></canvas>
-                            </div>
+                            <audio id="playbackAudio" controls class="w-100" style="height: 60px;"></audio>
                             <div class="mt-2">
                                 <button class="btn btn-sm btn-primary" onclick="saveRecording()">
                                     <i class="fas fa-save me-1"></i>Save Recording
@@ -152,18 +158,6 @@
                     </div>
                 </div>
 
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h5 class="mb-0">Recording Statistics</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="recordingStats">
-                            <div class="text-center text-muted">
-                                <i class="fas fa-info-circle me-2"></i>Select a profile to view statistics
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="card">
                     <div class="card-header">
@@ -236,7 +230,24 @@
                 return;
             }
 
-            fetch(`/api/recording_stats/${currentProfileId}`)
+            // Get selected language from prompt list
+            const promptListSelect = document.getElementById('promptList');
+            let selectedLanguage = null;
+            if (promptListSelect.value) {
+                const selectedOption = promptListSelect.options[promptListSelect.selectedIndex];
+                const text = selectedOption.textContent;
+                // Extract language from option text (e.g., "🇸🇪 General (550 prompts)")
+                if (text.includes('🇺🇸')) selectedLanguage = 'en-US';
+                else if (text.includes('🇬🇧')) selectedLanguage = 'en-GB';
+                else if (text.includes('🇸🇪')) selectedLanguage = 'sv-SE';
+                else if (text.includes('🇮🇹')) selectedLanguage = 'it-IT';
+            }
+
+            const url = selectedLanguage ? 
+                `/api/recording_stats/${currentProfileId}?selected_language=${selectedLanguage}` :
+                `/api/recording_stats/${currentProfileId}`;
+
+            fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     displayRecordingStats(data);
@@ -275,7 +286,7 @@
                             <span class="small">${language} ${category}</span>
                             <span class="small text-muted">${stat.recorded}/${stat.total}</span>
                         </div>
-                        <div class="progress" style="height: 8px;">
+                        <div class="progress" style="height: 6px;">
                             <div class="progress-bar" role="progressbar" style="width: ${percentage}%"></div>
                         </div>
                     </div>
@@ -345,6 +356,9 @@
                     
                     // Load recording statistics
                     loadRecordingStats();
+                    
+                    // Load recording history
+                    loadRecordingHistory();
                 })
                 .catch(error => console.error('Error loading prompts:', error));
         }
@@ -370,6 +384,9 @@
                     allPrompts = data.prompts;
                     loadCurrentPrompt();
                     loadRecordedStatus();
+                    
+                    // Refresh stats when prompt list changes
+                    loadRecordingStats();
                 })
                 .catch(error => console.error('Error loading prompt list:', error));
         }
@@ -400,6 +417,13 @@
             document.getElementById('recordButton').disabled = false;
             document.getElementById('prevButton').disabled = currentPromptIndex === 0;
             document.getElementById('nextButton').disabled = currentPromptIndex === allPrompts.length - 1;
+            
+            // Check if this prompt has a recording and show playback if it does
+            if (recordedPrompts.has(currentPromptIndex)) {
+                loadExistingRecording(currentPromptIndex);
+            } else {
+                document.getElementById('audioPlayback').classList.add('d-none');
+            }
             
             updateProgress();
         }
@@ -473,8 +497,6 @@
                     // Stop audio visualization
                     stopAudioVisualization();
                     
-                    // Draw playback waveform
-                    drawPlaybackWaveform(audioBlob);
                 };
 
                 mediaRecorder.start();
@@ -485,8 +507,6 @@
                 document.getElementById('recordButton').classList.add('btn-danger');
                 document.getElementById('recordingStatus').classList.remove('d-none');
                 document.getElementById('audioPlayback').classList.add('d-none');
-                document.getElementById('inputLevelContainer').classList.remove('d-none');
-                document.getElementById('waveformContainer').classList.remove('d-none');
                 
                 // Reset clipping counter
                 clippingCount = 0;
@@ -532,6 +552,10 @@
                     
                     // Update the current prompt display
                     loadCurrentPrompt();
+                    
+                    // Refresh recording stats and history
+                    loadRecordingStats();
+                    loadRecordingHistory();
                     
                     if (document.getElementById('autoAdvance').checked) {
                         nextPrompt();
@@ -582,15 +606,25 @@
         // Audio visualization functions
         function setupAudioVisualization(stream) {
             try {
+                // Clean up any existing audio context
+                if (audioContext) {
+                    audioContext.close();
+                }
+                
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 microphone = audioContext.createMediaStreamSource(stream);
                 
                 analyser.fftSize = 256;
+                analyser.smoothingTimeConstant = 0.8;
                 const bufferLength = analyser.frequencyBinCount;
                 dataArray = new Uint8Array(bufferLength);
                 
                 microphone.connect(analyser);
+                
+                // Ensure containers are visible
+                document.getElementById('inputLevelContainer').classList.remove('d-none');
+                document.getElementById('waveformContainer').classList.remove('d-none');
                 
                 // Start visualization loop
                 drawVisualization();
@@ -643,6 +677,9 @@
         function drawWaveform() {
             const canvas = document.getElementById('waveformCanvas');
             const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match display size
+            canvas.width = canvas.offsetWidth || 400;
             const width = canvas.width;
             const height = canvas.height;
             
@@ -745,64 +782,6 @@
             document.getElementById('audioPlayback').appendChild(warning);
         }
 
-        function drawPlaybackWaveform(audioBlob) {
-            const canvas = document.getElementById('playbackWaveformCanvas');
-            const ctx = canvas.getContext('2d');
-            const width = canvas.width;
-            const height = canvas.height;
-            
-            // Clear canvas
-            ctx.fillStyle = '#f8f9fa';
-            ctx.fillRect(0, 0, width, height);
-            
-            // Draw center line
-            ctx.strokeStyle = '#dee2e6';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(0, height / 2);
-            ctx.lineTo(width, height / 2);
-            ctx.stroke();
-            
-            // Create audio context for analysis
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const fileReader = new FileReader();
-            
-            fileReader.onload = function(e) {
-                audioContext.decodeAudioData(e.target.result).then(audioBuffer => {
-                    const channelData = audioBuffer.getChannelData(0);
-                    const samplesPerPixel = Math.floor(channelData.length / width);
-                    
-                    ctx.strokeStyle = '#28a745';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    
-                    for (let x = 0; x < width; x++) {
-                        const start = x * samplesPerPixel;
-                        const end = Math.min(start + samplesPerPixel, channelData.length);
-                        let sum = 0;
-                        
-                        for (let i = start; i < end; i++) {
-                            sum += Math.abs(channelData[i]);
-                        }
-                        
-                        const average = sum / (end - start);
-                        const y = (height / 2) - (average * height / 2);
-                        
-                        if (x === 0) {
-                            ctx.moveTo(x, y);
-                        } else {
-                            ctx.lineTo(x, y);
-                        }
-                    }
-                    
-                    ctx.stroke();
-                }).catch(error => {
-                    console.error('Error decoding audio for waveform:', error);
-                });
-            };
-            
-            fileReader.readAsArrayBuffer(audioBlob);
-        }
 
         function openTargetFolder() {
             if (!currentProfileId) {
@@ -822,6 +801,65 @@
                     alert('Error opening folder');
                 });
         }
+
+        function loadRecordingHistory() {
+            if (!currentProfileId) return;
+            
+            fetch(`/api/recording_history/${currentProfileId}?limit=10`)
+                .then(response => response.json())
+                .then(recordings => {
+                    const container = document.getElementById('recordingHistory');
+                    container.innerHTML = '';
+                    
+                    if (recordings.length === 0) {
+                        container.innerHTML = `
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>No recordings yet
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    recordings.forEach(rec => {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item';
+                        item.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">${rec.sentence.substring(0, 50)}${rec.sentence.length > 50 ? '...' : ''}</h6>
+                                    <small class="text-muted">${rec.prompt_list}</small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary" onclick="playRecording('${rec.filename}')">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+                })
+                .catch(error => console.error('Error loading recording history:', error));
+        }
+
+        function playRecording(filename) {
+            const audio = new Audio(`/api/recording/${currentProfileId}/${filename}`);
+            audio.play();
+        }
+
+        function loadExistingRecording(promptIndex) {
+            // Find the recording in metadata for this prompt
+            fetch(`/api/get_recording_for_prompt/${currentProfileId}/${currentPromptListId}/${promptIndex}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.filename) {
+                        const audio = document.getElementById('playbackAudio');
+                        audio.src = `/api/recording/${currentProfileId}/${data.filename}`;
+                        document.getElementById('audioPlayback').classList.remove('d-none');
+                        
+                    }
+                })
+                .catch(error => console.error('Error loading existing recording:', error));
+        }
+
     </script>
 
     <!-- Download Prompt List Modal -->
