@@ -5,16 +5,23 @@
 
 cd "$(dirname "$0")"
 
+# Detect OS and set activation path
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    VENV_ACTIVATE="venv/Scripts/activate"
+else
+    VENV_ACTIVATE="venv/bin/activate"
+fi
+
 # Check if virtual environment exists
-if [ ! -d "venv" ]; then
-    echo "❌ Virtual environment not found!"
+if [ ! -f "$VENV_ACTIVATE" ]; then
+    echo "❌ Virtual environment not found or incomplete!"
     echo "Please run ./setup_venv.sh first to create the virtual environment."
     exit 1
 fi
 
 # Activate virtual environment
-echo "Activating virtual environment..."
-source venv/bin/activate
+echo "🔧 Activating virtual environment..."
+source "$VENV_ACTIVATE"
 
 # Show current Python path
 echo "✅ Virtual environment activated!"

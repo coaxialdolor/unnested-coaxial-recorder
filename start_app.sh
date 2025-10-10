@@ -1,4 +1,4 @@
-#!/bin/bash
+ #!/bin/bash
 
 # Start script for Piper Recording Studio Coaxial Recorder
 # This script activates the virtual environment and starts the Flask app

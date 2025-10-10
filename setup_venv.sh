@@ -1,13 +1,20 @@
 #!/bin/bash
 
-# Setup script for Piper Recording Studio Coaxial Recorder
+# Setup script for Coaxial Recorder
 # This script creates a virtual environment and installs requirements
 
-echo "🚀 Setting up Piper Recording Studio Coaxial Recorder"
+echo "🚀 Setting up Coaxial Recorder"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Determine Python command
+if command -v python3 &>/dev/null; then
+    PYTHON=python3
+else
+    PYTHON=python
+fi
 
 # Check if virtual environment exists
 if [ -d "venv" ]; then
@@ -23,7 +30,7 @@ fi
 
 # Create virtual environment
 echo "Creating virtual environment..."
-python3 -m venv venv
+$PYTHON -m venv venv
 if [ $? -ne 0 ]; then
     echo "❌ Failed to create virtual environment!"
     exit 1
@@ -31,33 +38,31 @@ fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
-source venv/bin/activate
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to activate virtual environment!"
-    exit 1
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    source venv/Scripts/activate
+else
+    source venv/bin/activate
 fi
 
 # Upgrade pip and install build tools
 echo "Setting up build environment..."
-pip install --upgrade pip setuptools wheel
+$PYTHON -m pip install --upgrade pip setuptools wheel
 if [ $? -ne 0 ]; then
     echo "❌ Failed to upgrade pip/setuptools/wheel!"
     exit 1
 fi
 
-# Install requirements with better error handling
+# Install requirements with fallback
 echo "Installing requirements..."
 if [ -f "requirements.txt" ]; then
-    # Try to install with pre-built wheels first
     pip install --only-binary=all -r requirements.txt 2>/dev/null || {
         echo "⚠️  Some packages failed with pre-built wheels, trying source installation..."
         pip install -r requirements.txt
     }
-    
+
     if [ $? -ne 0 ]; then
         echo "❌ Failed to install requirements!"
         echo "Trying to install packages individually..."
-        # Try individual package installation
         pip install fastapi uvicorn python-multipart jinja2 aiofiles pydantic pydub pandas
         if [ $? -ne 0 ]; then
             echo "❌ Failed to install core packages!"
@@ -72,7 +77,11 @@ fi
 echo "✅ Setup completed successfully!"
 echo ""
 echo "To activate the virtual environment, run:"
-echo "  source venv/bin/activate"
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    echo "  source venv/Scripts/activate"
+else
+    echo "  source venv/bin/activate"
+fi
 echo ""
 echo "To launch the application, run:"
 echo "  ./launch.sh"
