@@ -1,0 +1,44 @@
+# Example Prompts for Voice Recording
+# This file contains example prompts for voice dataset recording
+# Each line represents a separate prompt that should be recorded
+
+# Basic sentences
+The quick brown fox jumps over the lazy dog.
+Hello, how are you doing today?
+I am learning to use the voice dataset manager.
+This is a test of the recording system.
+
+# Numbers and dates
+The date is January first, twenty twenty-four.
+My phone number is five five five, one two three four.
+The price is twenty-nine dollars and ninety-nine cents.
+
+# Questions
+What time is it right now?
+How do I get to the nearest store?
+Would you like to go out for dinner tonight?
+
+# Commands
+Please turn on the lights.
+Open the window and let some fresh air in.
+Call mom and tell her I'll be home late.
+
+# Descriptions
+The weather today is sunny and warm with a gentle breeze.
+I can see a beautiful sunset over the mountains.
+The coffee shop on the corner has the best espresso in town.
+
+# Technical terms
+The API endpoint returns a JSON response with user data.
+Install the dependencies using pip install -r requirements.txt.
+The neural network model achieved ninety-five percent accuracy.
+
+# Mixed content
+Welcome to the voice dataset manager version 1.0!
+Please record each prompt clearly and at a normal speaking pace.
+Thank you for helping to create high-quality voice datasets.
+
+# Longer passages
+Artificial intelligence and machine learning are transforming how we interact with technology. Voice synthesis systems like Piper enable computers to generate natural-sounding speech from text, opening up new possibilities for accessibility and human-computer interaction.
+
+The process of creating a voice dataset involves recording many hours of speech data, carefully transcribing each utterance, and organizing the audio files in a format that can be used to train machine learning models. Quality control is essential to ensure the resulting synthetic voice sounds natural and intelligible.

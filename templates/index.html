@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Dataset Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', path='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-microphone me-2"></i>Voice Dataset Manager
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/record">Record</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/profiles">Profiles</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">Voice Dataset Manager</h1>
+                <p class="lead">Create and manage voice datasets for Piper TTS training</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-user-circle me-2"></i>Voice Profiles
+                        </h5>
+                        <p class="card-text">Manage voice profiles and speakers</p>
+                        <a href="/profiles" class="btn btn-primary">Manage Profiles</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-microphone me-2"></i>Record Audio
+                        </h5>
+                        <p class="card-text">Record voice samples with prompts</p>
+                        <a href="/record" class="btn btn-success">Start Recording</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-download me-2"></i>Export Dataset
+                        </h5>
+                        <p class="card-text">Export datasets for Piper training</p>
+                        <button class="btn btn-info" onclick="exportDataset()">Export Dataset</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>Recording Statistics
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="totalProfiles">0</h4>
+                                    <p class="text-muted">Voice Profiles</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="totalRecordings">0</h4>
+                                    <p class="text-muted">Total Recordings</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="totalDuration">0h 0m</h4>
+                                    <p class="text-muted">Total Duration</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="completionRate">0%</h4>
+                                    <p class="text-muted">Completion Rate</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>Recent Activity
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentActivity" class="list-group">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>No recent activity
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', path='js/app.js') }}"></script>
+    <script>
+        // Load statistics on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStatistics();
+            loadRecentActivity();
+        });
+
+        function loadStatistics() {
+            fetch('/api/statistics')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('totalProfiles').textContent = data.profiles;
+                    document.getElementById('totalRecordings').textContent = data.recordings;
+                    document.getElementById('totalDuration').textContent = formatDuration(data.duration);
+                    document.getElementById('completionRate').textContent = data.completion_rate + '%';
+                })
+                .catch(error => console.error('Error loading statistics:', error));
+        }
+
+        function loadRecentActivity() {
+            fetch('/api/recordings?limit=5')
+                .then(response => response.json())
+                .then(data => {
+                    const activityList = document.getElementById('recentActivity');
+                    if (!data || !Array.isArray(data) || data.length === 0) {
+                        activityList.innerHTML = '<div class="text-center text-muted"><i class="fas fa-info-circle me-2"></i>No recent recordings</div>';
+                        return;
+                    }
+                    
+                    activityList.innerHTML = data.map(recording => `
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${recording.prompt_text ? recording.prompt_text.substring(0, 50) + '...' : 'No prompt text'}</h6>
+                                <small class="text-muted">${new Date(recording.created_at).toLocaleTimeString()}</small>
+                            </div>
+                            <p class="mb-1">Duration: ${formatDuration(recording.duration)} | Profile: ${recording.voice_profile_name || 'Unknown'}</p>
+                        </div>
+                    `).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading recent activity:', error);
+                    document.getElementById('recentActivity').innerHTML = '<div class="text-center text-danger"><i class="fas fa-exclamation-circle me-2"></i>Error loading activity</div>';
+                });
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${minutes}m`;
+        }
+
+        function formatTime(timestamp) {
+            return new Date(timestamp).toLocaleString();
+        }
+
+        function exportDataset() {
+            window.location.href = '/api/export_dataset';
+        }
+    </script>
+</body>
+</html>
