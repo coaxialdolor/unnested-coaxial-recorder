@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Dataset - Voice Dataset Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', path='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-microphone me-2"></i>Voice Dataset Manager
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/record">Record</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/profiles">Profiles</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/postprocess">Post-Process</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/export">Export</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">Export Dataset</h1>
+                <p class="lead">Export your voice datasets in various formats for training or distribution</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-download me-2"></i>Export Settings
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="exportForm">
+                            <div class="mb-3">
+                                <label for="voiceProfile" class="form-label">Voice Profile</label>
+                                <select class="form-select" id="voiceProfile" required>
+                                    <option value="">Select a voice profile...</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="promptList" class="form-label">Prompt List</label>
+                                <select class="form-select" id="promptList" required>
+                                    <option value="">Select a prompt list...</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="exportFormat" class="form-label">Export Format</label>
+                                <select class="form-select" id="exportFormat" required>
+                                    <option value="wav">WAV (Uncompressed)</option>
+                                    <option value="mp3">MP3 (Compressed)</option>
+                                    <option value="flac">FLAC (Lossless)</option>
+                                    <option value="ogg">OGG Vorbis</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="sampleRate" class="form-label">Sample Rate</label>
+                                <select class="form-select" id="sampleRate" required>
+                                    <option value="22050">22.05 kHz (Piper Standard)</option>
+                                    <option value="44100" selected>44.1 kHz (CD Quality)</option>
+                                    <option value="48000">48 kHz (Professional)</option>
+                                    <option value="16000">16 kHz (Telephone Quality)</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="bitDepth" class="form-label">Bit Depth</label>
+                                <select class="form-select" id="bitDepth" required>
+                                    <option value="16" selected>16-bit</option>
+                                    <option value="24">24-bit</option>
+                                    <option value="32">32-bit</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="channels" class="form-label">Channels</label>
+                                <select class="form-select" id="channels" required>
+                                    <option value="1" selected>Mono</option>
+                                    <option value="2">Stereo</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3" id="mp3Settings" style="display: none;">
+                                <label for="mp3Bitrate" class="form-label">MP3 Bitrate</label>
+                                <select class="form-select" id="mp3Bitrate">
+                                    <option value="128">128 kbps</option>
+                                    <option value="192" selected>192 kbps</option>
+                                    <option value="256">256 kbps</option>
+                                    <option value="320">320 kbps</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="includeMetadata" checked>
+                                    <label class="form-check-label" for="includeMetadata">
+                                        Include metadata file (JSON)
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="includeTranscripts" checked>
+                                    <label class="form-check-label" for="includeTranscripts">
+                                        Include transcript file (TXT)
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="createZip" checked>
+                                    <label class="form-check-label" for="createZip">
+                                        Create ZIP archive
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-success w-100" id="exportButton">
+                                <i class="fas fa-download me-2"></i>Export Dataset
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Export Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="exportInfo">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>Select a voice profile and prompt list to see export information
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cogs me-2"></i>Export Progress
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="progressContainer" class="d-none">
+                            <div class="progress mb-3">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span id="progressText">0 / 0 files processed</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                            <div id="currentFile" class="mt-2 small text-muted"></div>
+                        </div>
+                        <div id="noProgress" class="text-center text-muted">
+                            <i class="fas fa-info-circle me-2"></i>No export in progress
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>Export History
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="exportHistory">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>No export history available
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', path='js/app.js') }}"></script>
+    <script>
+        let currentExportJob = null;
+        let progressInterval = null;
+
+        // Load voice profiles on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadVoiceProfiles();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Form submission
+            document.getElementById('exportForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                startExport();
+            });
+
+            // Voice profile change
+            document.getElementById('voiceProfile').addEventListener('change', function() {
+                loadPromptLists();
+                updateExportInfo();
+            });
+
+            // Prompt list change
+            document.getElementById('promptList').addEventListener('change', function() {
+                updateExportInfo();
+            });
+
+            // Format change
+            document.getElementById('exportFormat').addEventListener('change', function() {
+                toggleMp3Settings();
+                updateExportInfo();
+            });
+
+            // Settings change
+            ['sampleRate', 'bitDepth', 'channels', 'mp3Bitrate'].forEach(id => {
+                document.getElementById(id).addEventListener('change', updateExportInfo);
+            });
+        }
+
+        function loadVoiceProfiles() {
+            fetch('/api/profiles')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('voiceProfile');
+                    select.innerHTML = '<option value="">Select a voice profile...</option>';
+                    data.forEach(profile => {
+                        const option = document.createElement('option');
+                        option.value = profile.id;
+                        option.textContent = profile.name;
+                        select.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading profiles:', error));
+        }
+
+        function loadPromptLists() {
+            const profileId = document.getElementById('voiceProfile').value;
+            if (!profileId) {
+                document.getElementById('promptList').innerHTML = '<option value="">Select a prompt list...</option>';
+                return;
+            }
+
+            fetch(`/api/postprocess/datasets/${profileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('promptList');
+                    select.innerHTML = '<option value="">Select a prompt list...</option>';
+                    data.forEach(dataset => {
+                        const option = document.createElement('option');
+                        option.value = dataset.id;
+                        option.textContent = dataset.display_name;
+                        select.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading prompt lists:', error));
+        }
+
+        function toggleMp3Settings() {
+            const format = document.getElementById('exportFormat').value;
+            const mp3Settings = document.getElementById('mp3Settings');
+            mp3Settings.style.display = format === 'mp3' ? 'block' : 'none';
+        }
+
+        function updateExportInfo() {
+            const profileId = document.getElementById('voiceProfile').value;
+            const promptListId = document.getElementById('promptList').value;
+
+            if (!profileId || !promptListId) {
+                document.getElementById('exportInfo').innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="fas fa-info-circle me-2"></i>Select a voice profile and prompt list to see export information
+                    </div>
+                `;
+                return;
+            }
+
+            // Get export information
+            fetch(`/api/postprocess/info/${profileId}/${promptListId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const format = document.getElementById('exportFormat').value;
+                    const sampleRate = document.getElementById('sampleRate').value;
+                    const bitDepth = document.getElementById('bitDepth').value;
+                    const channels = document.getElementById('channels').value;
+
+                    // Calculate estimated file size
+                    const estimatedSize = calculateEstimatedSize(data.total_files, data.average_duration, format, sampleRate, bitDepth, channels);
+
+                    document.getElementById('exportInfo').innerHTML = `
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Total Files:</strong> ${data.total_files}
+                            </div>
+                            <div class="col-6">
+                                <strong>Total Duration:</strong> ${formatDuration(data.total_duration)}
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-6">
+                                <strong>Average Duration:</strong> ${formatDuration(data.average_duration)}
+                            </div>
+                            <div class="col-6">
+                                <strong>Estimated Size:</strong> ${formatFileSize(estimatedSize)}
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <strong>Export Settings:</strong>
+                            <ul class="list-unstyled mt-2">
+                                <li><i class="fas fa-file-audio me-2"></i>Format: ${format.toUpperCase()}</li>
+                                <li><i class="fas fa-wave-square me-2"></i>Sample Rate: ${sampleRate} Hz</li>
+                                <li><i class="fas fa-layer-group me-2"></i>Bit Depth: ${bitDepth}-bit</li>
+                                <li><i class="fas fa-volume-up me-2"></i>Channels: ${channels === '1' ? 'Mono' : 'Stereo'}</li>
+                                ${format === 'mp3' ? `<li><i class="fas fa-compress me-2"></i>Bitrate: ${document.getElementById('mp3Bitrate').value} kbps</li>` : ''}
+                            </ul>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error loading export info:', error);
+                    document.getElementById('exportInfo').innerHTML = `
+                        <div class="text-center text-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>Error loading export information
+                        </div>
+                    `;
+                });
+        }
+
+        function calculateEstimatedSize(fileCount, avgDuration, format, sampleRate, bitDepth, channels) {
+            // Rough calculation for different formats
+            const bytesPerSecond = (sampleRate * (bitDepth / 8) * channels);
+            let compressionRatio = 1;
+
+            switch(format) {
+                case 'mp3':
+                    const bitrate = parseInt(document.getElementById('mp3Bitrate').value) * 1000;
+                    compressionRatio = bitrate / (bytesPerSecond * 8);
+                    break;
+                case 'flac':
+                    compressionRatio = 0.5; // FLAC compression
+                    break;
+                case 'ogg':
+                    compressionRatio = 0.3; // OGG compression
+                    break;
+                case 'wav':
+                default:
+                    compressionRatio = 1; // No compression
+            }
+
+            return fileCount * avgDuration * bytesPerSecond * compressionRatio;
+        }
+
+        function startExport() {
+            const profileId = document.getElementById('voiceProfile').value;
+            const promptListId = document.getElementById('promptList').value;
+            const exportFormat = document.getElementById('exportFormat').value;
+            const sampleRate = parseInt(document.getElementById('sampleRate').value);
+            const bitDepth = parseInt(document.getElementById('bitDepth').value);
+            const channels = parseInt(document.getElementById('channels').value);
+            const mp3Bitrate = document.getElementById('mp3Bitrate').value;
+            const includeMetadata = document.getElementById('includeMetadata').checked;
+            const includeTranscripts = document.getElementById('includeTranscripts').checked;
+            const createZip = document.getElementById('createZip').checked;
+
+            if (!profileId || !promptListId) {
+                alert('Please select both a voice profile and prompt list.');
+                return;
+            }
+
+            const exportButton = document.getElementById('exportButton');
+            exportButton.disabled = true;
+            exportButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting...';
+
+            // Show progress container
+            document.getElementById('progressContainer').classList.remove('d-none');
+            document.getElementById('noProgress').classList.add('d-none');
+
+            // Start export
+            fetch('/api/export/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    profile_id: profileId,
+                    prompt_list_id: promptListId,
+                    format: exportFormat,
+                    sample_rate: sampleRate,
+                    bit_depth: bitDepth,
+                    channels: channels,
+                    mp3_bitrate: mp3Bitrate,
+                    include_metadata: includeMetadata,
+                    include_transcripts: includeTranscripts,
+                    create_zip: createZip
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentExportJob = data.job_id;
+                    startProgressTracking();
+                } else {
+                    throw new Error(data.error || 'Failed to start export');
+                }
+            })
+            .catch(error => {
+                console.error('Error starting export:', error);
+                alert('Error starting export: ' + error.message);
+                resetExportButton();
+            });
+        }
+
+        function startProgressTracking() {
+            progressInterval = setInterval(() => {
+                fetch(`/api/export/status/${currentExportJob}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        updateProgress(data);
+
+                        if (data.status === 'completed' || data.status === 'failed') {
+                            clearInterval(progressInterval);
+                            resetExportButton();
+
+                            if (data.status === 'completed') {
+                                // Download the exported file
+                                if (data.download_url) {
+                                    window.location.href = data.download_url;
+                                }
+                                alert('Export completed successfully!');
+                                loadExportHistory();
+                            } else {
+                                alert('Export failed: ' + (data.error || 'Unknown error'));
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking progress:', error);
+                    });
+            }, 1000);
+        }
+
+        function updateProgress(data) {
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const progressPercent = document.getElementById('progressPercent');
+            const currentFile = document.getElementById('currentFile');
+
+            const percentage = Math.round((data.processed / data.total) * 100);
+
+            progressBar.style.width = percentage + '%';
+            progressText.textContent = `${data.processed} / ${data.total} files processed`;
+            progressPercent.textContent = percentage + '%';
+
+            if (data.current_file) {
+                currentFile.textContent = `Processing: ${data.current_file}`;
+            }
+        }
+
+        function resetExportButton() {
+            const exportButton = document.getElementById('exportButton');
+            exportButton.disabled = false;
+            exportButton.innerHTML = '<i class="fas fa-download me-2"></i>Export Dataset';
+
+            document.getElementById('progressContainer').classList.add('d-none');
+            document.getElementById('noProgress').classList.remove('d-none');
+        }
+
+        function loadExportHistory() {
+            fetch('/api/export/history')
+                .then(response => response.json())
+                .then(data => {
+                    const historyContainer = document.getElementById('exportHistory');
+
+                    if (!data || data.length === 0) {
+                        historyContainer.innerHTML = `
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle me-2"></i>No export history available
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    historyContainer.innerHTML = data.map(job => `
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${job.profile_name} - ${job.prompt_list_name}</h6>
+                                <small class="text-muted">${new Date(job.created_at).toLocaleString()}</small>
+                            </div>
+                            <p class="mb-1">
+                                <span class="badge bg-${job.status === 'completed' ? 'success' : job.status === 'failed' ? 'danger' : 'warning'}">${job.status}</span>
+                                ${job.exported_files} / ${job.total_files} files exported
+                            </p>
+                            <small class="text-muted">
+                                Format: ${job.format.toUpperCase()}, ${job.sample_rate}Hz, ${job.bit_depth}-bit
+                                ${job.download_url ? `<a href="${job.download_url}" class="ms-2"><i class="fas fa-download"></i> Download</a>` : ''}
+                            </small>
+                        </div>
+                    `).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading export history:', error);
+                });
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+
+            if (hours > 0) {
+                return `${hours}h ${minutes}m ${secs}s`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${secs}s`;
+            } else {
+                return `${secs}s`;
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Load export history on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadExportHistory();
+        });
+    </script>
+</body>
+</html>

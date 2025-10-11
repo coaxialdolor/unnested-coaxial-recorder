@@ -17,6 +17,18 @@ from pydantic import BaseModel
 from pathlib import Path
 import subprocess
 
+# Import phoneme and MFA utilities
+try:
+    from utils.phonemes import get_phoneme_manager, is_language_supported, get_supported_languages
+    from utils.mfa import get_mfa_aligner, is_mfa_available
+    from utils.checkpoints import get_checkpoint_manager, download_checkpoint, get_available_checkpoints
+    PHONEME_SUPPORT = True
+    CHECKPOINT_SUPPORT = True
+except ImportError:
+    PHONEME_SUPPORT = False
+    CHECKPOINT_SUPPORT = False
+    print("Warning: Phoneme, MFA, and checkpoint utilities not available")
+
 # Create FastAPI app
 app = FastAPI(title="Voice Dataset Manager")
 
@@ -368,6 +380,83 @@ async def get_statistics():
         "total_duration": total_duration,
         "avg_duration": total_duration / total_recordings if total_recordings > 0 else 0
     }
+
+@app.get("/api/statistics/profiles")
+async def get_profile_statistics():
+    """Get detailed statistics for each profile"""
+    try:
+        profile_stats = []
+
+        for profile_dir in VOICES_DIR.iterdir():
+            if profile_dir.is_dir() and profile_dir.name != "example":
+                profile_name = profile_dir.name
+                recordings_dir = profile_dir / "recordings"
+                prompts_dir = profile_dir / "prompts"
+                metadata_file = profile_dir / "metadata.jsonl"
+
+                # Count recordings and get duration
+                recording_count = 0
+                total_duration = 0
+                prompt_lists = {}
+
+                if recordings_dir.exists():
+                    for file_path in recordings_dir.glob("*.wav"):
+                        recording_count += 1
+                        # Get actual duration if possible
+                        try:
+                            from utils.audio import get_audio_duration
+                            duration = get_audio_duration(file_path)
+                            total_duration += duration
+                        except:
+                            total_duration += 3.0  # Fallback estimate
+
+                # Count prompts by list
+                if prompts_dir.exists():
+                    for prompt_file in prompts_dir.glob("*.txt"):
+                        try:
+                            with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
+                                lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                                prompt_lists[prompt_file.stem] = len(lines)
+                        except Exception:
+                            prompt_lists[prompt_file.stem] = 0
+
+                # Count recordings by prompt list from metadata
+                recordings_by_list = {}
+                if metadata_file.exists():
+                    with open(metadata_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if line.strip():
+                                try:
+                                    metadata = json.loads(line.strip())
+                                    prompt_list = metadata.get("prompt_list", "unknown")
+                                    recordings_by_list[prompt_list] = recordings_by_list.get(prompt_list, 0) + 1
+                                except json.JSONDecodeError:
+                                    continue
+
+                # Calculate completion rates
+                completion_rates = {}
+                for prompt_list, total_prompts in prompt_lists.items():
+                    recorded = recordings_by_list.get(prompt_list, 0)
+                    completion_rates[prompt_list] = (recorded / total_prompts * 100) if total_prompts > 0 else 0
+
+                # Overall completion rate
+                total_prompts = sum(prompt_lists.values())
+                overall_completion = (recording_count / total_prompts * 100) if total_prompts > 0 else 0
+
+                profile_stats.append({
+                    "name": profile_name,
+                    "recording_count": recording_count,
+                    "total_duration": total_duration,
+                    "prompt_lists": prompt_lists,
+                    "recordings_by_list": recordings_by_list,
+                    "completion_rates": completion_rates,
+                    "overall_completion": overall_completion,
+                    "total_prompts": total_prompts
+                })
+
+        return sorted(profile_stats, key=lambda x: x["name"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Recent activity endpoint
 @app.get("/api/recent_activity")
@@ -1481,6 +1570,1033 @@ async def record_page_dashboard(request: Request):
             "request": request,
             "profiles": []
         })
+
+# Post-processing endpoints
+@app.get("/postprocess", response_class=HTMLResponse)
+async def postprocess_page(request: Request):
+    """Render the post-processing page"""
+    return templates.TemplateResponse("postprocess.html", {"request": request})
+
+@app.get("/api/postprocess/datasets/{profile_name}")
+async def get_postprocess_datasets(profile_name: str):
+    """Get datasets with recordings for a profile"""
+    try:
+        profile_dir = VOICES_DIR / profile_name
+        recordings_dir = profile_dir / "recordings"
+
+        if not profile_dir.exists() or not recordings_dir.exists():
+            return []
+
+        # Get all prompt lists with recordings
+        datasets = {}
+
+        # Read metadata to find files for each prompt list
+        metadata_file = profile_dir / "metadata.jsonl"
+        if metadata_file.exists():
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            metadata = json.loads(line.strip())
+                            prompt_list = metadata.get("prompt_list")
+                            filename = metadata.get("filename")
+
+                            if prompt_list and filename:
+                                file_path = recordings_dir / filename
+                                if file_path.exists():
+                                    if prompt_list not in datasets:
+                                        datasets[prompt_list] = {
+                                            "name": prompt_list,
+                                            "recorded_count": 0,
+                                            "total_count": 0
+                                        }
+                                    datasets[prompt_list]["recorded_count"] += 1
+                        except json.JSONDecodeError:
+                            continue
+
+        # Get total count for each prompt list from prompt files
+        prompts_dir = profile_dir / "prompts"
+        if prompts_dir.exists():
+            for prompt_file in prompts_dir.glob("*.txt"):
+                prompt_name = prompt_file.stem
+                if prompt_name in datasets:
+                    try:
+                        with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
+                            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                            datasets[prompt_name]["total_count"] = len(lines)
+                    except Exception:
+                        datasets[prompt_name]["total_count"] = 0
+
+        # Convert to list and sort
+        result = []
+        for prompt_list, data in datasets.items():
+            if data["recorded_count"] > 0:  # Only include datasets with recordings
+                result.append({
+                    "id": f"{profile_name}_{prompt_list}",
+                    "name": prompt_list,
+                    "recorded_count": data["recorded_count"],
+                    "total_count": data["total_count"],
+                    "display_name": f"{prompt_list} {data['recorded_count']}/{data['total_count']}"
+                })
+
+        return sorted(result, key=lambda x: x["name"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/postprocess/info/{profile_name}/{prompt_list_id}")
+async def get_postprocess_info(profile_name: str, prompt_list_id: str):
+    """Get information about files to be processed"""
+    try:
+        profile_dir = VOICES_DIR / profile_name
+        recordings_dir = profile_dir / "recordings"
+
+        if not profile_dir.exists() or not recordings_dir.exists():
+            raise HTTPException(status_code=404, detail="Profile or recordings directory not found")
+
+        # Parse prompt list name from ID
+        if prompt_list_id.startswith(f"{profile_name}_"):
+            prompt_name = prompt_list_id[len(profile_name) + 1:]
+        else:
+            prompt_name = prompt_list_id
+
+        # Get all audio files for this prompt list
+        audio_files = []
+        total_duration = 0
+        total_size = 0
+
+        # Read metadata to find files for this prompt list
+        metadata_file = profile_dir / "metadata.jsonl"
+        if metadata_file.exists():
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            metadata = json.loads(line.strip())
+                            if metadata.get("prompt_list") == prompt_name:
+                                filename = metadata.get("filename")
+                                if filename:
+                                    file_path = recordings_dir / filename
+                                    if file_path.exists():
+                                        audio_files.append(file_path)
+                                        # Get file info
+                                        from utils.audio import get_audio_info
+                                        info = get_audio_info(file_path)
+                                        if info:
+                                            total_duration += info['duration']
+                                            total_size += info['file_size']
+                        except json.JSONDecodeError:
+                            continue
+
+        return {
+            "total_files": len(audio_files),
+            "total_duration": total_duration,
+            "average_duration": total_duration / len(audio_files) if audio_files else 0,
+            "total_size": total_size
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# In-memory storage for processing jobs (in production, use Redis or database)
+processing_jobs = {}
+
+@app.post("/api/postprocess/start")
+async def start_postprocessing(request: Request):
+    """Start post-processing job"""
+    try:
+        data = await request.json()
+
+        profile_id = data.get("profile_id")
+        prompt_list_id = data.get("prompt_list_id")
+        silence_threshold = data.get("silence_threshold", -40)
+        target_volume = data.get("target_volume", -20)
+        silence_padding = data.get("silence_padding", 200)
+        create_backup = data.get("create_backup", True)
+
+        if not profile_id or not prompt_list_id:
+            raise HTTPException(status_code=400, detail="profile_id and prompt_list_id are required")
+
+        # Generate job ID
+        import uuid
+        job_id = str(uuid.uuid4())
+
+        # Initialize job status
+        processing_jobs[job_id] = {
+            "status": "running",
+            "profile_id": profile_id,
+            "prompt_list_id": prompt_list_id,
+            "silence_threshold": silence_threshold,
+            "target_volume": target_volume,
+            "silence_padding": silence_padding,
+            "create_backup": create_backup,
+            "processed": 0,
+            "total": 0,
+            "current_file": None,
+            "created_at": datetime.now().isoformat(),
+            "error": None
+        }
+
+        # Start processing in background
+        import asyncio
+        asyncio.create_task(process_audio_batch(job_id))
+
+        return {"success": True, "job_id": job_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def process_audio_batch(job_id: str):
+    """Process audio files in background"""
+    try:
+        job = processing_jobs[job_id]
+        profile_dir = VOICES_DIR / job["profile_id"]
+        recordings_dir = profile_dir / "recordings"
+
+        # Parse prompt list name
+        prompt_list_id = job["prompt_list_id"]
+        if prompt_list_id.startswith(f"{job['profile_id']}_"):
+            prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
+        else:
+            prompt_name = prompt_list_id
+
+        # Get files to process
+        files_to_process = []
+        metadata_file = profile_dir / "metadata.jsonl"
+        if metadata_file.exists():
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            metadata = json.loads(line.strip())
+                            if metadata.get("prompt_list") == prompt_name:
+                                filename = metadata.get("filename")
+                                if filename:
+                                    file_path = recordings_dir / filename
+                                    if file_path.exists():
+                                        files_to_process.append(file_path)
+                        except json.JSONDecodeError:
+                            continue
+
+        job["total"] = len(files_to_process)
+
+        # Process each file
+        for i, file_path in enumerate(files_to_process):
+            job["current_file"] = file_path.name
+            job["processed"] = i
+
+            # Process the file
+            from utils.audio import process_audio_enhanced
+            success, _, _ = process_audio_enhanced(
+                file_path,
+                job["silence_threshold"],
+                job["target_volume"],
+                job["silence_padding"],
+                job["create_backup"]
+            )
+
+            if not success:
+                print(f"Failed to process {file_path}")
+
+        # Mark as completed
+        job["status"] = "completed"
+        job["processed"] = job["total"]
+        job["current_file"] = None
+
+    except Exception as e:
+        processing_jobs[job_id]["status"] = "failed"
+        processing_jobs[job_id]["error"] = str(e)
+        print(f"Processing job {job_id} failed: {e}")
+
+@app.get("/api/postprocess/status/{job_id}")
+async def get_postprocess_status(job_id: str):
+    """Get status of post-processing job"""
+    if job_id not in processing_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return processing_jobs[job_id]
+
+@app.get("/api/postprocess/history")
+async def get_postprocess_history():
+    """Get post-processing history"""
+    # Return recent jobs (last 10)
+    recent_jobs = []
+    for job_id, job in processing_jobs.items():
+        if job["status"] in ["completed", "failed"]:
+            recent_jobs.append({
+                "job_id": job_id,
+                "profile_name": job["profile_id"],
+                "prompt_list_name": job["prompt_list_id"],
+                "status": job["status"],
+                "processed_files": job["processed"],
+                "total_files": job["total"],
+                "silence_threshold": job["silence_threshold"],
+                "target_volume": job["target_volume"],
+                "silence_padding": job["silence_padding"],
+                "created_at": job["created_at"],
+                "error": job.get("error")
+            })
+
+    # Sort by creation time, newest first
+    recent_jobs.sort(key=lambda x: x["created_at"], reverse=True)
+    return recent_jobs[:10]
+
+# Export endpoints
+@app.get("/export", response_class=HTMLResponse)
+async def export_page(request: Request):
+    """Render the export page"""
+    return templates.TemplateResponse("export.html", {"request": request})
+
+# In-memory storage for export jobs (in production, use Redis or database)
+export_jobs = {}
+
+@app.post("/api/export/start")
+async def start_export(request: Request):
+    """Start export job"""
+    try:
+        data = await request.json()
+
+        profile_id = data.get("profile_id")
+        prompt_list_id = data.get("prompt_list_id")
+        format = data.get("format", "wav")
+        sample_rate = data.get("sample_rate", 44100)
+        bit_depth = data.get("bit_depth", 16)
+        channels = data.get("channels", 1)
+        mp3_bitrate = data.get("mp3_bitrate", "192")
+        include_metadata = data.get("include_metadata", True)
+        include_transcripts = data.get("include_transcripts", True)
+        create_zip = data.get("create_zip", True)
+
+        if not profile_id or not prompt_list_id:
+            raise HTTPException(status_code=400, detail="profile_id and prompt_list_id are required")
+
+        # Generate job ID
+        import uuid
+        job_id = str(uuid.uuid4())
+
+        # Initialize job status
+        export_jobs[job_id] = {
+            "status": "running",
+            "profile_id": profile_id,
+            "prompt_list_id": prompt_list_id,
+            "format": format,
+            "sample_rate": sample_rate,
+            "bit_depth": bit_depth,
+            "channels": channels,
+            "mp3_bitrate": mp3_bitrate,
+            "include_metadata": include_metadata,
+            "include_transcripts": include_transcripts,
+            "create_zip": create_zip,
+            "processed": 0,
+            "total": 0,
+            "current_file": None,
+            "created_at": datetime.now().isoformat(),
+            "error": None,
+            "download_url": None
+        }
+
+        # Start export in background
+        import asyncio
+        asyncio.create_task(export_audio_batch(job_id))
+
+        return {"success": True, "job_id": job_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def export_audio_batch(job_id: str):
+    """Export audio files in background"""
+    try:
+        job = export_jobs[job_id]
+        profile_dir = VOICES_DIR / job["profile_id"]
+        recordings_dir = profile_dir / "recordings"
+
+        # Parse prompt list name
+        prompt_list_id = job["prompt_list_id"]
+        if prompt_list_id.startswith(f"{job['profile_id']}_"):
+            prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
+        else:
+            prompt_name = prompt_list_id
+
+        # Get files to export
+        files_to_export = []
+        metadata_entries = []
+        metadata_file = profile_dir / "metadata.jsonl"
+        if metadata_file.exists():
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            metadata = json.loads(line.strip())
+                            if metadata.get("prompt_list") == prompt_name:
+                                filename = metadata.get("filename")
+                                if filename:
+                                    file_path = recordings_dir / filename
+                                    if file_path.exists():
+                                        files_to_export.append(file_path)
+                                        metadata_entries.append(metadata)
+                        except json.JSONDecodeError:
+                            continue
+
+        job["total"] = len(files_to_export)
+
+        # Create export directory
+        export_dir = profile_dir / "exports" / f"{prompt_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        export_dir.mkdir(parents=True, exist_ok=True)
+
+        # Process each file
+        exported_files = []
+        for i, file_path in enumerate(files_to_export):
+            job["current_file"] = file_path.name
+            job["processed"] = i
+
+            # Export the file with new format
+            from utils.audio import export_audio_file
+            success, exported_path = export_audio_file(
+                file_path,
+                export_dir,
+                job["format"],
+                job["sample_rate"],
+                job["bit_depth"],
+                job["channels"],
+                job["mp3_bitrate"]
+            )
+
+            if success:
+                exported_files.append(exported_path)
+            else:
+                print(f"Failed to export {file_path}")
+
+        # Create metadata file if requested
+        if job["include_metadata"] and metadata_entries:
+            metadata_export_path = export_dir / "metadata.json"
+            with open(metadata_export_path, "w", encoding="utf-8") as f:
+                json.dump(metadata_entries, f, indent=2, ensure_ascii=False)
+
+        # Create transcript file if requested
+        if job["include_transcripts"] and metadata_entries:
+            transcript_path = export_dir / "transcripts.txt"
+            with open(transcript_path, "w", encoding="utf-8") as f:
+                for entry in metadata_entries:
+                    f.write(f"{entry.get('filename', '')}\t{entry.get('sentence', '')}\n")
+
+        # Create ZIP if requested
+        if job["create_zip"]:
+            import zipfile
+            zip_path = export_dir.parent / f"{export_dir.name}.zip"
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path in exported_files:
+                    zipf.write(file_path, file_path.name)
+                if job["include_metadata"] and metadata_entries:
+                    zipf.write(metadata_export_path, "metadata.json")
+                if job["include_transcripts"] and metadata_entries:
+                    zipf.write(transcript_path, "transcripts.txt")
+
+            # Set download URL to ZIP file
+            job["download_url"] = f"/api/export/download/{zip_path.name}"
+        else:
+            # Set download URL to directory (or first file)
+            job["download_url"] = f"/api/export/download/{export_dir.name}"
+
+        # Mark as completed
+        job["status"] = "completed"
+        job["processed"] = job["total"]
+        job["current_file"] = None
+
+    except Exception as e:
+        export_jobs[job_id]["status"] = "failed"
+        export_jobs[job_id]["error"] = str(e)
+        print(f"Export job {job_id} failed: {e}")
+
+@app.get("/api/export/status/{job_id}")
+async def get_export_status(job_id: str):
+    """Get status of export job"""
+    if job_id not in export_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return export_jobs[job_id]
+
+@app.get("/api/export/history")
+async def get_export_history():
+    """Get export history"""
+    # Return recent jobs (last 10)
+    recent_jobs = []
+    for job_id, job in export_jobs.items():
+        if job["status"] in ["completed", "failed"]:
+            recent_jobs.append({
+                "job_id": job_id,
+                "profile_name": job["profile_id"],
+                "prompt_list_name": job["prompt_list_id"],
+                "status": job["status"],
+                "exported_files": job["processed"],
+                "total_files": job["total"],
+                "format": job["format"],
+                "sample_rate": job["sample_rate"],
+                "bit_depth": job["bit_depth"],
+                "created_at": job["created_at"],
+                "download_url": job.get("download_url"),
+                "error": job.get("error")
+            })
+
+    # Sort by creation time, newest first
+    recent_jobs.sort(key=lambda x: x["created_at"], reverse=True)
+    return recent_jobs[:10]
+
+@app.get("/api/export/download/{filename}")
+async def download_export(filename: str):
+    """Download exported file"""
+    # Find the file in any profile's exports directory
+    for profile_dir in VOICES_DIR.iterdir():
+        if profile_dir.is_dir():
+            exports_dir = profile_dir / "exports"
+            if exports_dir.exists():
+                file_path = exports_dir / filename
+                if file_path.exists():
+                    return FileResponse(
+                        path=str(file_path),
+                        filename=filename,
+                        media_type='application/octet-stream'
+                    )
+
+    raise HTTPException(status_code=404, detail="File not found")
+
+# Training endpoints
+@app.get("/train", response_class=HTMLResponse)
+async def train_page(request: Request):
+    """Render the training page"""
+    return templates.TemplateResponse("train.html", {"request": request})
+
+# In-memory storage for training jobs (in production, use Redis or database)
+training_jobs = {}
+
+@app.get("/api/train/gpu-status")
+async def get_gpu_status():
+    """Check if GPU is available for training"""
+    try:
+        import torch
+        gpu_available = torch.cuda.is_available()
+        gpu_count = torch.cuda.device_count() if gpu_available else 0
+        return {
+            "available": gpu_available,
+            "count": gpu_count,
+            "devices": [torch.cuda.get_device_name(i) for i in range(gpu_count)] if gpu_available else []
+        }
+    except ImportError:
+        return {"available": False, "count": 0, "devices": [], "error": "PyTorch not installed"}
+
+@app.post("/api/train/start")
+async def start_training(
+    training_type: str = Form(...),
+    profile_id: str = Form(...),
+    prompt_list_id: str = Form(...),
+    model_size: str = Form(...),
+    learning_rate: float = Form(...),
+    batch_size: int = Form(...),
+    epochs: int = Form(...),
+    train_split: float = Form(...),
+    validation_split: float = Form(...),
+    save_interval: int = Form(...),
+    early_stopping: int = Form(...),
+    use_gpu: bool = Form(...),
+    mixed_precision: bool = Form(...),
+    output_dir: str = Form(...),
+    model_name: str = Form(""),
+    checkpoint_path: str = Form("")
+):
+    """Start training job"""
+    try:
+        # Generate job ID
+        import uuid
+        job_id = str(uuid.uuid4())
+
+        # Initialize job status
+        training_jobs[job_id] = {
+            "status": "running",
+            "training_type": training_type,
+            "profile_id": profile_id,
+            "prompt_list_id": prompt_list_id,
+            "model_size": model_size,
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "epochs": epochs,
+            "train_split": train_split,
+            "validation_split": validation_split,
+            "save_interval": save_interval,
+            "early_stopping": early_stopping,
+            "use_gpu": use_gpu,
+            "mixed_precision": mixed_precision,
+            "output_dir": output_dir,
+            "model_name": model_name,
+            "checkpoint_path": checkpoint_path,
+            "current_epoch": 0,
+            "total_epochs": epochs,
+            "current_loss": None,
+            "eta": None,
+            "console_output": [],
+            "created_at": datetime.now().isoformat(),
+            "error": None
+        }
+
+        # Start training in background
+        import asyncio
+        asyncio.create_task(train_model_background(job_id))
+
+        return {"success": True, "job_id": job_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def train_model_background(job_id: str):
+    """Train model in background (simulated)"""
+    try:
+        job = training_jobs[job_id]
+
+        # Simulate training progress
+        for epoch in range(1, job["total_epochs"] + 1):
+            if training_jobs[job_id]["status"] != "running":
+                break
+
+            job["current_epoch"] = epoch
+
+            # Simulate loss decrease
+            base_loss = 2.0
+            loss = base_loss * (0.9 ** (epoch / 10))
+            job["current_loss"] = loss
+
+            # Simulate console output
+            job["console_output"].append(f"Epoch {epoch}/{job['total_epochs']}: Loss = {loss:.4f}")
+
+            # Calculate ETA
+            remaining_epochs = job["total_epochs"] - epoch
+            eta_minutes = remaining_epochs * 2  # Assume 2 minutes per epoch
+            if eta_minutes > 60:
+                eta_hours = eta_minutes / 60
+                job["eta"] = f"{eta_hours:.1f}h"
+            else:
+                job["eta"] = f"{eta_minutes:.0f}m"
+
+            # Simulate training time
+            await asyncio.sleep(1)  # In real implementation, this would be actual training
+
+        # Mark as completed
+        if training_jobs[job_id]["status"] == "running":
+            training_jobs[job_id]["status"] = "completed"
+            training_jobs[job_id]["console_output"].append("Training completed successfully!")
+
+    except Exception as e:
+        training_jobs[job_id]["status"] = "failed"
+        training_jobs[job_id]["error"] = str(e)
+        training_jobs[job_id]["console_output"].append(f"Training failed: {str(e)}")
+
+@app.get("/api/train/status/{job_id}")
+async def get_training_status(job_id: str):
+    """Get status of training job"""
+    if job_id not in training_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return training_jobs[job_id]
+
+@app.post("/api/train/stop/{job_id}")
+async def stop_training(job_id: str):
+    """Stop training job"""
+    if job_id not in training_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    training_jobs[job_id]["status"] = "stopped"
+    training_jobs[job_id]["console_output"].append("Training stopped by user")
+
+    return {"success": True}
+
+# Phoneme and Language Support API Endpoints
+
+@app.get("/api/languages")
+async def get_supported_languages():
+    """Get list of all supported languages with phoneme information"""
+    if not PHONEME_SUPPORT:
+        return {"error": "Phoneme support not available"}
+
+    try:
+        phoneme_manager = get_phoneme_manager()
+        languages = phoneme_manager.get_supported_languages()
+        return {
+            "success": True,
+            "languages": languages,
+            "total_count": len(languages)
+        }
+    except Exception as e:
+        return {"error": f"Failed to get languages: {str(e)}"}
+
+@app.get("/api/languages/{language_code}")
+async def get_language_info(language_code: str):
+    """Get detailed information about a specific language"""
+    if not PHONEME_SUPPORT:
+        return {"error": "Phoneme support not available"}
+
+    try:
+        phoneme_manager = get_phoneme_manager()
+        config = phoneme_manager.get_language_config(language_code)
+
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Language {language_code} not supported")
+
+        return {
+            "success": True,
+            "language_code": language_code,
+            "config": config,
+            "phoneme_set_info": phoneme_manager.get_phoneme_set_info(language_code)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to get language info: {str(e)}"}
+
+@app.post("/api/phonemes/convert")
+async def convert_text_to_phonemes(text: str = Form(...), language_code: str = Form(...)):
+    """Convert text to phonemes for a given language"""
+    if not PHONEME_SUPPORT:
+        return {"error": "Phoneme support not available"}
+
+    try:
+        phoneme_manager = get_phoneme_manager()
+
+        if not is_language_supported(language_code):
+            raise HTTPException(status_code=400, detail=f"Language {language_code} not supported")
+
+        phonemes = phoneme_manager.text_to_phonemes(text, language_code)
+
+        if not phonemes:
+            raise HTTPException(status_code=500, detail="Failed to convert text to phonemes")
+
+        return {
+            "success": True,
+            "text": text,
+            "language_code": language_code,
+            "phonemes": phonemes,
+            "valid": phoneme_manager.validate_phonemes(phonemes, language_code)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to convert text: {str(e)}"}
+
+@app.get("/api/mfa/status")
+async def get_mfa_status():
+    """Get MFA (Montreal Forced Aligner) status and available models"""
+    if not PHONEME_SUPPORT:
+        return {"error": "MFA support not available"}
+
+    try:
+        mfa_aligner = get_mfa_aligner()
+        available = is_mfa_available()
+
+        result = {
+            "success": True,
+            "available": available,
+            "path": mfa_aligner.mfa_path if available else None
+        }
+
+        if available:
+            models = mfa_aligner.get_available_models()
+            result["available_models"] = models
+            result["total_models"] = len(models)
+
+        return result
+    except Exception as e:
+        return {"error": f"Failed to get MFA status: {str(e)}"}
+
+@app.post("/api/mfa/download-model")
+async def download_mfa_model(language_code: str = Form(...)):
+    """Download MFA model for a specific language"""
+    if not PHONEME_SUPPORT:
+        return {"error": "MFA support not available"}
+
+    try:
+        mfa_aligner = get_mfa_aligner()
+
+        if not is_mfa_available():
+            raise HTTPException(status_code=503, detail="MFA not available")
+
+        success = mfa_aligner.download_model(language_code)
+
+        if success:
+            return {
+                "success": True,
+                "message": f"MFA model for {language_code} downloaded successfully"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to download MFA model for {language_code}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to download model: {str(e)}"}
+
+@app.get("/api/phonemes/validate")
+async def validate_phoneme_system():
+    """Validate the phoneme and MFA system"""
+    if not PHONEME_SUPPORT:
+        return {"error": "Phoneme support not available"}
+
+    try:
+        validation_result = {
+            "success": True,
+            "phoneme_system": {
+                "available": True,
+                "supported_languages": len(get_supported_languages())
+            },
+            "mfa_system": {
+                "available": is_mfa_available(),
+                "path": get_mfa_aligner().mfa_path if is_mfa_available() else None
+            },
+            "test_conversion": None
+        }
+
+        # Test phoneme conversion
+        try:
+            phoneme_manager = get_phoneme_manager()
+            test_phonemes = phoneme_manager.text_to_phonemes("Hello world", "en-US")
+            validation_result["test_conversion"] = {
+                "success": test_phonemes is not None,
+                "result": test_phonemes
+            }
+        except Exception as e:
+            validation_result["test_conversion"] = {
+                "success": False,
+                "error": str(e)
+            }
+
+        return validation_result
+
+    except Exception as e:
+        return {"error": f"Validation failed: {str(e)}"}
+
+# Checkpoint Management API Endpoints
+
+@app.get("/api/checkpoints")
+async def get_all_checkpoints():
+    """Get all available checkpoints across all languages"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+        checkpoints = checkpoint_manager.get_all_available_checkpoints()
+        cache_info = checkpoint_manager.get_cache_info()
+
+        return {
+            "success": True,
+            "checkpoints": checkpoints,
+            "cache_info": cache_info
+        }
+    except Exception as e:
+        return {"error": f"Failed to get checkpoints: {str(e)}"}
+
+@app.get("/api/checkpoints/{language_code}")
+async def get_language_checkpoints(language_code: str):
+    """Get available checkpoints for a specific language"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+        checkpoints = checkpoint_manager.get_available_checkpoints(language_code)
+
+        if not checkpoints:
+            raise HTTPException(status_code=404, detail=f"No checkpoints available for language: {language_code}")
+
+        return {
+            "success": True,
+            "language_code": language_code,
+            "checkpoints": checkpoints,
+            "count": len(checkpoints)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to get checkpoints for {language_code}: {str(e)}"}
+
+@app.get("/api/checkpoints/{language_code}/{voice_id}")
+async def get_checkpoint_info(language_code: str, voice_id: str):
+    """Get detailed information about a specific checkpoint"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+
+        # Get checkpoint details
+        checkpoints = checkpoint_manager.get_available_checkpoints(language_code)
+        checkpoint_info = None
+
+        for cp in checkpoints:
+            if cp["voice_id"] == voice_id:
+                checkpoint_info = cp
+                break
+
+        if not checkpoint_info:
+            raise HTTPException(status_code=404, detail=f"Checkpoint {language_code}.{voice_id} not found")
+
+        # Get metadata if downloaded
+        metadata = checkpoint_manager.get_checkpoint_metadata(language_code, voice_id)
+
+        return {
+            "success": True,
+            "checkpoint": checkpoint_info,
+            "metadata": metadata,
+            "downloaded": checkpoint_info["downloaded"]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to get checkpoint info: {str(e)}"}
+
+@app.post("/api/checkpoints/{language_code}/{voice_id}/download")
+async def download_checkpoint_endpoint(language_code: str, voice_id: str):
+    """Download a specific checkpoint"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+
+        # Check if already downloaded
+        if checkpoint_manager.is_checkpoint_downloaded(language_code, voice_id):
+            return {
+                "success": True,
+                "message": "Checkpoint already downloaded",
+                "downloaded": True
+            }
+
+        # Start download
+        success, message = checkpoint_manager.download_checkpoint(language_code, voice_id)
+
+        if success:
+            return {
+                "success": True,
+                "message": message,
+                "downloaded": True,
+                "checkpoint_path": str(checkpoint_manager.get_checkpoint_path(language_code, voice_id))
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Download failed: {message}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to download checkpoint: {str(e)}"}
+
+@app.delete("/api/checkpoints/{language_code}/{voice_id}")
+async def delete_checkpoint_endpoint(language_code: str, voice_id: str):
+    """Delete a downloaded checkpoint"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+
+        if not checkpoint_manager.is_checkpoint_downloaded(language_code, voice_id):
+            raise HTTPException(status_code=404, detail="Checkpoint not found")
+
+        success = checkpoint_manager.delete_checkpoint(language_code, voice_id)
+
+        if success:
+            return {
+                "success": True,
+                "message": f"Checkpoint {language_code}.{voice_id} deleted successfully"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete checkpoint")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to delete checkpoint: {str(e)}"}
+
+@app.get("/api/checkpoints/recommended/{language_code}")
+async def get_recommended_checkpoint(language_code: str, gender: str = None):
+    """Get recommended checkpoint for a language"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+        recommended = checkpoint_manager.get_recommended_checkpoint(language_code, gender)
+
+        if not recommended:
+            raise HTTPException(status_code=404, detail=f"No checkpoints available for language: {language_code}")
+
+        return {
+            "success": True,
+            "language_code": language_code,
+            "gender_preference": gender,
+            "recommended": recommended
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to get recommended checkpoint: {str(e)}"}
+
+@app.get("/api/checkpoints/cache/info")
+async def get_cache_info():
+    """Get checkpoint cache information"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+        cache_info = checkpoint_manager.get_cache_info()
+
+        return {
+            "success": True,
+            "cache_info": cache_info
+        }
+    except Exception as e:
+        return {"error": f"Failed to get cache info: {str(e)}"}
+
+@app.delete("/api/checkpoints/cache/clear")
+async def clear_checkpoint_cache():
+    """Clear all downloaded checkpoints"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+        success = checkpoint_manager.clear_cache()
+
+        if success:
+            return {
+                "success": True,
+                "message": "Checkpoint cache cleared successfully"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to clear cache")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to clear cache: {str(e)}"}
+
+@app.post("/api/checkpoints/validate/{language_code}/{voice_id}")
+async def validate_checkpoint_endpoint(language_code: str, voice_id: str):
+    """Validate a downloaded checkpoint"""
+    if not CHECKPOINT_SUPPORT:
+        return {"error": "Checkpoint support not available"}
+
+    try:
+        checkpoint_manager = get_checkpoint_manager()
+
+        if not checkpoint_manager.is_checkpoint_downloaded(language_code, voice_id):
+            raise HTTPException(status_code=404, detail="Checkpoint not found")
+
+        is_valid = checkpoint_manager.validate_checkpoint(language_code, voice_id)
+
+        return {
+            "success": True,
+            "language_code": language_code,
+            "voice_id": voice_id,
+            "valid": is_valid,
+            "message": "Checkpoint is valid" if is_valid else "Checkpoint validation failed"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": f"Failed to validate checkpoint: {str(e)}"}
 
 # Run the application
 if __name__ == "__main__":

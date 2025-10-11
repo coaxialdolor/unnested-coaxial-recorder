@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# Setup script for Coaxial Recorder
-# This script creates a virtual environment and installs requirements
+# Basic setup script for Coaxial Recorder
+# This script creates a virtual environment and installs basic requirements
+# For full training capabilities, use install.sh instead
 
-echo "🚀 Setting up Coaxial Recorder"
+echo "🚀 Setting up Coaxial Recorder (Basic Installation)"
+echo "For full training capabilities, run: ./install.sh"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

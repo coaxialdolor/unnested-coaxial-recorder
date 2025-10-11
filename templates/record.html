@@ -511,16 +511,25 @@
 
         async function startRecording() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // Request audio with 44kHz sample rate
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 44100,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
 
-                // Safari-compatible MediaRecorder options
-                let mimeType = 'audio/webm';
+                // Prioritize WAV format for better quality, then fallback to other formats
+                let mimeType = 'audio/wav';
                 const supportedTypes = [
+                    'audio/wav',
                     'audio/webm;codecs=opus',
                     'audio/webm',
                     'audio/mp4',
                     'audio/mp4;codecs=mp4a.40.2',
-                    'audio/wav',
                     'audio/ogg;codecs=opus'
                 ];
 
