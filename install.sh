@@ -78,9 +78,20 @@ print_status "Detected operating system: $OS"
 # Check Python version and offer to install 3.11 locally using prebuilt binaries
 print_status "Checking Python installation..."
 
-# Function to check if we already have a local Python 3.11
+# Function to check if we already have a local Python 3.10 or 3.11
 check_local_python311() {
-    if [ -f "python311/bin/python3" ]; then
+    # Check for Python 3.10 first (preferred)
+    if [ -f "python310/bin/python3.10" ]; then
+        echo "python310/bin/python3.10"
+        return 0
+    elif [ -f "python310/bin/python3" ]; then
+        echo "python310/bin/python3"
+        return 0
+    # Then check for Python 3.11
+    elif [ -f "python311/bin/python3.11" ]; then
+        echo "python311/bin/python3.11"
+        return 0
+    elif [ -f "python311/bin/python3" ]; then
         echo "python311/bin/python3"
         return 0
     elif [ -f "python311/python.exe" ]; then
@@ -141,28 +152,51 @@ elif [ "$CURRENT_MINOR" -ge 12 ]; then
     echo "  ✅ Audio processing: Works"
     echo "  ❌ Montreal Forced Aligner: Will be SKIPPED"
     echo ""
-    echo "RECOMMENDED PYTHON VERSIONS:"
-    echo "  🥇 Python 3.10: Best compatibility (all packages work)"
-    echo "  🥈 Python 3.11: Good compatibility (most packages work, MFA updated)"
-    echo "  🥉 Python 3.12+: Limited (MFA and some dependencies won't work)"
+    echo "RECOMMENDED: Python 3.10 for full compatibility (all packages work)"
     echo ""
-    echo "You can:"
-    echo "  1. Continue with Python $CURRENT_VERSION (MFA will be skipped)"
-    echo "  2. Install Python 3.10 or 3.11 with pyenv:"
-    echo "     brew install pyenv"
-    echo "     pyenv install 3.10.13"
-    echo "     pyenv local 3.10.13"
+    echo "Options:"
+    echo "  1. Install Python 3.10 locally (recommended - self-contained)"
+    echo "  2. Continue with Python $CURRENT_VERSION (MFA will be skipped)"
+    echo "  3. Cancel and install Python 3.10 system-wide with pyenv"
     echo ""
-    read -p "Continue with Python $CURRENT_VERSION anyway? [Y/n]: " continue_anyway
+    read -p "Choose option [1/2/3]: " install_choice
 
-    if [ -z "$continue_anyway" ] || [ "$continue_anyway" = "Y" ] || [ "$continue_anyway" = "y" ]; then
+    if [ "$install_choice" = "1" ]; then
+        print_status "Installing Python 3.10 locally in this project folder..."
+        print_status "This keeps everything self-contained and easy to remove."
+        # Set flag to install Python 3.10 locally
+        INSTALL_LOCAL_PYTHON=1
+        INSTALL_PYTHON_VERSION="3.10"
+    elif [ "$install_choice" = "2" ] || [ -z "$install_choice" ]; then
         print_status "Continuing with Python $CURRENT_VERSION..."
         PYTHON_CMD="$CURRENT_PYTHON"
         print_warning "Montreal Forced Aligner will be skipped"
     else
         print_error "Installation cancelled."
-        echo "Install Python 3.10 or 3.11 and run this script again."
+        echo ""
+        echo "To install Python 3.10 system-wide:"
+        echo "  brew install pyenv"
+        echo "  pyenv install 3.10.13"
+        echo "  pyenv local 3.10.13"
+        echo "  bash install.sh"
         exit 1
+    fi
+elif [ "$CURRENT_MINOR" -lt 10 ]; then
+    print_warning "Python $CURRENT_VERSION is older than recommended (3.10+)"
+    print_warning "Some packages may not work correctly"
+    echo ""
+    echo "Options:"
+    echo "  1. Install Python 3.10 locally (recommended)"
+    echo "  2. Continue with Python $CURRENT_VERSION anyway"
+    echo ""
+    read -p "Choose option [1/2]: " install_choice
+
+    if [ "$install_choice" = "1" ]; then
+        print_status "Installing Python 3.10 locally..."
+        INSTALL_LOCAL_PYTHON=1
+        INSTALL_PYTHON_VERSION="3.10"
+    else
+        PYTHON_CMD="$CURRENT_PYTHON"
     fi
 elif [ "$CURRENT_MINOR" -eq 11 ]; then
     print_success "Python 3.11 detected - excellent choice!"
@@ -188,146 +222,122 @@ else
     PYTHON_CMD="$CURRENT_PYTHON"
 fi
 
-# Legacy code for local Python 3.11 installation (kept for reference but not triggered by default)
-if false; then
-    if [ -z "$install_311" ] || [ "$install_311" = "Y" ] || [ "$install_311" = "y" ]; then
-        print_status "Installing Python 3.11 locally using prebuilt binaries..."
-
-        # Create python311 directory before extraction
-        mkdir -p python311
-
-        if [ "$OS" == "macos" ]; then
-            print_status "Downloading Python 3.11 for macOS..."
-
-            # Download the actual binary distribution, not the installer package
-            if command -v curl >/dev/null 2>&1; then
-                curl -L -o python311-macos.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-apple-darwin-install_only.tar.gz"
-            else
-                wget -O python311-macos.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-apple-darwin-install_only.tar.gz"
-            fi
-
-            if [ -f "python311-macos.tar.gz" ]; then
-                print_status "Extracting portable Python..."
-                tar -xzf python311-macos.tar.gz -C python311 --strip-components=2
-                rm -f python311-macos.tar.gz
-
-                if [ -f "python311/bin/python3.11" ]; then
-                    PYTHON_CMD="python311/bin/python3.11"
-                    print_success "Python 3.11 installed locally at: $PYTHON_CMD"
-                elif [ -f "python311/bin/python3" ]; then
-                    PYTHON_CMD="python311/bin/python3"
-                    print_success "Python 3.11 installed locally at: $PYTHON_CMD"
-                else
-                    print_warning "Local Python extraction failed, using system Python"
-                    PYTHON_CMD="$CURRENT_PYTHON"
-                fi
-            else
-                print_warning "Failed to download Python, using system Python"
-                PYTHON_CMD="$CURRENT_PYTHON"
-            fi
-
-        elif [ "$OS" == "linux" ]; then
-            print_status "Downloading standalone Python 3.11 for Linux..."
-
-            # Download the standalone Linux build from python-build-standalone
-            if command -v curl >/dev/null 2>&1; then
-                curl -L -o python311-linux.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-unknown-linux-gnu-install_only.tar.gz"
-            else
-                wget -O python311-linux.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-unknown-linux-gnu-install_only.tar.gz"
-            fi
-
-            if [ -f "python311-linux.tar.gz" ]; then
-                print_status "Extracting Python..."
-                # Extract to a temporary directory first to see the structure
-                mkdir -p python311-temp
-                tar -xzf python311-linux.tar.gz -C python311-temp
-
-                # Find the actual Python installation directory
-                PYTHON_DIR=$(find python311-temp -name "python" -type d | head -1)
-                if [ -n "$PYTHON_DIR" ]; then
-                    # Copy the contents to our target directory
-                    cp -r "$PYTHON_DIR"/* python311/
-                    rm -rf python311-temp python311-linux.tar.gz
-
-                    if [ -f "python311/bin/python3" ]; then
-                        PYTHON_CMD="python311/bin/python3"
-                        print_success "Python 3.11 installed locally at: $PYTHON_CMD"
-                    else
-                        print_warning "Local Python extraction failed, using system Python"
-                        PYTHON_CMD="$CURRENT_PYTHON"
-                    fi
-                else
-                    # Fallback: try direct extraction
-                    tar -xzf python311-linux.tar.gz -C python311 --strip-components=1
-                    rm -f python311-linux.tar.gz
-
-                    if [ -f "python311/bin/python3" ]; then
-                        PYTHON_CMD="python311/bin/python3"
-                        print_success "Python 3.11 installed locally at: $PYTHON_CMD"
-                    else
-                        print_warning "Local Python extraction failed, using system Python"
-                        PYTHON_CMD="$CURRENT_PYTHON"
-                    fi
-                fi
-            else
-                print_warning "Failed to download Python, using system Python"
-                PYTHON_CMD="$CURRENT_PYTHON"
-            fi
-
-        elif [ "$OS" == "windows" ]; then
-            print_status "Downloading portable Python 3.11 for Windows..."
-
-            # Download portable/embeddable Python from official source
-            if command -v curl >/dev/null 2>&1; then
-                curl -L -o python311-windows.zip "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
-            else
-                wget -O python311-windows.zip "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
-            fi
-
-            if [ -f "python311-windows.zip" ]; then
-                print_status "Extracting portable Python..."
-                mkdir -p python311
-                unzip -q python311-windows.zip -d python311
-                rm -f python311-windows.zip
-
-                # Also get and install pip
-                print_status "Setting up pip for portable Python..."
-                if command -v curl >/dev/null 2>&1; then
-                    curl -L -o get-pip.py "https://bootstrap.pypa.io/get-pip.py"
-                else
-                    wget -O get-pip.py "https://bootstrap.pypa.io/get-pip.py"
-                fi
-
-                if [ -f "python311/python.exe" ] && [ -f "get-pip.py" ]; then
-                    # Install pip
-                    ./python311/python.exe get-pip.py
-                    rm -f get-pip.py
-
-                    PYTHON_CMD="./python311/python.exe"
-                    print_success "Portable Python 3.11 installed locally at: $PYTHON_CMD"
-                    print_warning "Note: Using embedded Python on Windows. Some advanced features may be limited."
-                    print_warning "For full functionality, consider installing Python 3.11 system-wide."
-                else
-                    print_warning "Portable Python setup failed, using system Python"
-                    PYTHON_CMD="$CURRENT_PYTHON"
-                    rm -f get-pip.py
-                fi
-            else
-                print_warning "Failed to download portable Python, using system Python"
-                PYTHON_CMD="$CURRENT_PYTHON"
-            fi
-        fi
+# Handle local Python installation (3.10 or 3.11)
+if [ "${INSTALL_LOCAL_PYTHON:-0}" -eq 1 ]; then
+    if [ "$INSTALL_PYTHON_VERSION" = "3.10" ]; then
+        PYTHON_VERSION="3.10.13"
+        PYTHON_DIR="python310"
+        PYTHON_DOWNLOAD_VERSION="3.10.13+20240224"
+        print_status "Installing Python 3.10 locally using prebuilt binaries..."
     else
-        # User chose not to install 3.11
-        PYTHON_CMD="$CURRENT_PYTHON"
-        if [ "$CURRENT_MINOR" -ge 12 ]; then
-            print_warning "Using Python 3.12+ - applying compatibility fixes for some packages"
-        fi
+        PYTHON_VERSION="3.11.6"
+        PYTHON_DIR="python311"
+        PYTHON_DOWNLOAD_VERSION="3.11.6+20231002"
+        print_status "Installing Python 3.11 locally using prebuilt binaries..."
     fi
-else
-    # We're already using Python 3.11 system-wide
-    PYTHON_CMD="$CURRENT_PYTHON"
-    print_success "Using system Python 3.11 for optimal compatibility"
+
+    # Create python directory before extraction
+    mkdir -p "$PYTHON_DIR"
+
+    if [ "$OS" == "macos" ]; then
+        print_status "Downloading Python $PYTHON_VERSION for macOS..."
+
+        # Construct download URL based on version
+        DOWNLOAD_DATE=$(echo "$PYTHON_DOWNLOAD_VERSION" | cut -d'+' -f2)
+        ARCHIVE_NAME="${PYTHON_DIR}-macos.tar.gz"
+        DOWNLOAD_URL="https://github.com/indygreg/python-build-standalone/releases/download/${DOWNLOAD_DATE}/cpython-${PYTHON_DOWNLOAD_VERSION}-x86_64-apple-darwin-install_only.tar.gz"
+
+        # Download the actual binary distribution
+        if command -v curl >/dev/null 2>&1; then
+            curl -L -o "$ARCHIVE_NAME" "$DOWNLOAD_URL"
+        else
+            wget -O "$ARCHIVE_NAME" "$DOWNLOAD_URL"
+        fi
+
+        if [ -f "$ARCHIVE_NAME" ]; then
+            print_status "Extracting portable Python..."
+            tar -xzf "$ARCHIVE_NAME" -C "$PYTHON_DIR" --strip-components=2 2>/dev/null || {
+                print_warning "Standard extraction failed, trying alternative..."
+                tar -xzf "$ARCHIVE_NAME" -C "$PYTHON_DIR" --strip-components=1
+            }
+            rm -f "$ARCHIVE_NAME"
+
+            # Find the Python executable
+            PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f1,2)
+            if [ -f "$PYTHON_DIR/bin/python$PYTHON_MAJOR" ]; then
+                PYTHON_CMD="$PYTHON_DIR/bin/python$PYTHON_MAJOR"
+                print_success "Python $PYTHON_VERSION installed locally at: $PYTHON_CMD"
+            elif [ -f "$PYTHON_DIR/bin/python3" ]; then
+                PYTHON_CMD="$PYTHON_DIR/bin/python3"
+                print_success "Python $PYTHON_VERSION installed locally at: $PYTHON_CMD"
+            elif [ -f "$PYTHON_DIR/python$PYTHON_MAJOR" ]; then
+                PYTHON_CMD="$PYTHON_DIR/python$PYTHON_MAJOR"
+                print_success "Python $PYTHON_VERSION installed locally at: $PYTHON_CMD"
+            else
+                print_warning "Local Python extraction failed, using system Python"
+                PYTHON_CMD="$CURRENT_PYTHON"
+            fi
+        else
+            print_warning "Failed to download Python, using system Python"
+            PYTHON_CMD="$CURRENT_PYTHON"
+        fi
+
+    elif [ "$OS" == "linux" ]; then
+        print_status "Downloading standalone Python $PYTHON_VERSION for Linux..."
+
+        # Construct download URL
+        DOWNLOAD_DATE=$(echo "$PYTHON_DOWNLOAD_VERSION" | cut -d'+' -f2)
+        ARCHIVE_NAME="${PYTHON_DIR}-linux.tar.gz"
+        DOWNLOAD_URL="https://github.com/indygreg/python-build-standalone/releases/download/${DOWNLOAD_DATE}/cpython-${PYTHON_DOWNLOAD_VERSION}-x86_64-unknown-linux-gnu-install_only.tar.gz"
+
+        # Download the standalone Linux build
+        if command -v curl >/dev/null 2>&1; then
+            curl -L -o "$ARCHIVE_NAME" "$DOWNLOAD_URL"
+        else
+            wget -O "$ARCHIVE_NAME" "$DOWNLOAD_URL"
+        fi
+
+        if [ -f "$ARCHIVE_NAME" ]; then
+            print_status "Extracting Python..."
+            # Extract to a temporary directory first
+            TEMP_DIR="${PYTHON_DIR}-temp"
+            mkdir -p "$TEMP_DIR"
+            tar -xzf "$ARCHIVE_NAME" -C "$TEMP_DIR"
+
+            # Find the actual Python installation directory
+            FOUND_PYTHON_DIR=$(find "$TEMP_DIR" -name "python" -type d | head -1)
+            if [ -n "$FOUND_PYTHON_DIR" ]; then
+                # Copy the contents to our target directory
+                cp -r "$FOUND_PYTHON_DIR"/* "$PYTHON_DIR"/
+                rm -rf "$TEMP_DIR" "$ARCHIVE_NAME"
+            else
+                # Fallback: try direct extraction
+                tar -xzf "$ARCHIVE_NAME" -C "$PYTHON_DIR" --strip-components=1
+                rm -f "$TEMP_DIR" "$ARCHIVE_NAME"
+            fi
+
+            # Find the Python executable
+            PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f1,2)
+            if [ -f "$PYTHON_DIR/bin/python$PYTHON_MAJOR" ]; then
+                PYTHON_CMD="$PYTHON_DIR/bin/python$PYTHON_MAJOR"
+                print_success "Python $PYTHON_VERSION installed locally at: $PYTHON_CMD"
+            elif [ -f "$PYTHON_DIR/bin/python3" ]; then
+                PYTHON_CMD="$PYTHON_DIR/bin/python3"
+                print_success "Python $PYTHON_VERSION installed locally at: $PYTHON_CMD"
+            else
+                print_warning "Local Python extraction failed, using system Python"
+                PYTHON_CMD="$CURRENT_PYTHON"
+            fi
+        else
+            print_warning "Failed to download Python, using system Python"
+            PYTHON_CMD="$CURRENT_PYTHON"
+        fi
+
+    elif [ "$OS" == "windows" ]; then
+        print_warning "Windows portable Python download not yet implemented for version selection"
+        print_warning "Please install Python $PYTHON_VERSION system-wide and run this script again"
+        PYTHON_CMD="$CURRENT_PYTHON"
+    fi
 fi
 
 # Verify we can use the chosen Python
