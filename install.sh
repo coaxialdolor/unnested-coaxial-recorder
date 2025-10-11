@@ -51,17 +51,225 @@ fi
 
 print_status "Detected operating system: $OS"
 
-# Check for Python
+# Check Python version and offer to install 3.11 locally using prebuilt binaries
 print_status "Checking Python installation..."
-if command -v python3 &>/dev/null; then
-    PYTHON=python3
-    PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
-elif command -v python &>/dev/null; then
-    PYTHON=python
-    PYTHON_VERSION=$(python --version 2>&1 | cut -d' ' -f2)
-else
+
+# Function to check if we already have a local Python 3.11
+check_local_python311() {
+    if [ -f "python311/bin/python3" ]; then
+        echo "python311/bin/python3"
+        return 0
+    elif [ -f "python311/python.exe" ]; then
+        echo "python311/python.exe"
+        return 0
+    elif [ -f "python311/bin/python" ]; then
+        echo "python311/bin/python"
+        return 0
+    fi
+    return 1
+}
+
+# Better Python detection function
+get_system_python() {
+    # First check if we have a local Python 3.11
+    LOCAL_PYTHON_CMD=$(check_local_python311)
+    if [ -n "$LOCAL_PYTHON_CMD" ] && [ -f "$LOCAL_PYTHON_CMD" ]; then
+        echo "$LOCAL_PYTHON_CMD"
+        return 0
+    fi
+
+    # Fall back to system Python
+    if command -v python3 &>/dev/null; then
+        command -v python3
+    elif command -v python &>/dev/null; then
+        command -v python
+    else
+        return 1
+    fi
+}
+
+# Get current Python info
+CURRENT_PYTHON=$(get_system_python)
+if [ $? -ne 0 ]; then
     print_error "Python is not installed. Please install Python 3.8 or higher."
     exit 1
+fi
+
+CURRENT_VERSION=$($CURRENT_PYTHON --version 2>&1 | cut -d' ' -f2)
+CURRENT_MINOR=$(echo $CURRENT_VERSION | cut -d'.' -f2)
+
+print_success "Found system Python $CURRENT_VERSION"
+
+# Check if we already have local Python 3.11
+LOCAL_PYTHON_CMD=$(check_local_python311)
+
+if [ -n "$LOCAL_PYTHON_CMD" ]; then
+    print_success "Found local Python 3.11 installation"
+    PYTHON_CMD="$LOCAL_PYTHON_CMD"
+elif [ "$CURRENT_MINOR" -ne 11 ]; then
+    print_warning "Python 3.11 is recommended for optimal package compatibility."
+    print_warning "Current system version: $CURRENT_VERSION"
+    echo ""
+    echo "Python 3.11 will be installed locally in this project folder."
+    echo "This keeps everything self-contained and easy to remove."
+    echo ""
+    read -p "Install Python 3.11 locally? [Y/n]: " install_311
+
+    if [[ $install_311 =~ ^[Yy]?$ ]]; then
+        print_status "Installing Python 3.11 locally using prebuilt binaries..."
+
+        # Create python311 directory before extraction
+        mkdir -p python311
+
+        if [ "$OS" == "macos" ]; then
+            print_status "Downloading Python 3.11 for macOS..."
+
+            # Download the actual binary distribution, not the installer package
+            if command -v curl &>/dev/null; then
+                curl -L -o python311-macos.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-apple-darwin-install_only.tar.gz"
+            else
+                wget -O python311-macos.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-apple-darwin-install_only.tar.gz"
+            fi
+
+            if [ -f "python311-macos.tar.gz" ]; then
+                print_status "Extracting portable Python..."
+                tar -xzf python311-macos.tar.gz -C python311 --strip-components=2
+                rm -f python311-macos.tar.gz
+
+                if [ -f "python311/bin/python3.11" ]; then
+                    PYTHON_CMD="python311/bin/python3.11"
+                    print_success "Python 3.11 installed locally at: $PYTHON_CMD"
+                elif [ -f "python311/bin/python3" ]; then
+                    PYTHON_CMD="python311/bin/python3"
+                    print_success "Python 3.11 installed locally at: $PYTHON_CMD"
+                else
+                    print_warning "Local Python extraction failed, using system Python"
+                    PYTHON_CMD="$CURRENT_PYTHON"
+                fi
+            else
+                print_warning "Failed to download Python, using system Python"
+                PYTHON_CMD="$CURRENT_PYTHON"
+            fi
+
+        elif [ "$OS" == "linux" ]; then
+            print_status "Downloading standalone Python 3.11 for Linux..."
+
+            # Download the standalone Linux build from python-build-standalone
+            if command -v curl &>/dev/null; then
+                curl -L -o python311-linux.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-unknown-linux-gnu-install_only.tar.gz"
+            else
+                wget -O python311-linux.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-unknown-linux-gnu-install_only.tar.gz"
+            fi
+
+            if [ -f "python311-linux.tar.gz" ]; then
+                print_status "Extracting Python..."
+                # Extract to a temporary directory first to see the structure
+                mkdir -p python311-temp
+                tar -xzf python311-linux.tar.gz -C python311-temp
+
+                # Find the actual Python installation directory
+                PYTHON_DIR=$(find python311-temp -name "python" -type d | head -1)
+                if [ -n "$PYTHON_DIR" ]; then
+                    # Copy the contents to our target directory
+                    cp -r "$PYTHON_DIR"/* python311/
+                    rm -rf python311-temp python311-linux.tar.gz
+
+                    if [ -f "python311/bin/python3" ]; then
+                        PYTHON_CMD="python311/bin/python3"
+                        print_success "Python 3.11 installed locally at: $PYTHON_CMD"
+                    else
+                        print_warning "Local Python extraction failed, using system Python"
+                        PYTHON_CMD="$CURRENT_PYTHON"
+                    fi
+                else
+                    # Fallback: try direct extraction
+                    tar -xzf python311-linux.tar.gz -C python311 --strip-components=1
+                    rm -f python311-linux.tar.gz
+
+                    if [ -f "python311/bin/python3" ]; then
+                        PYTHON_CMD="python311/bin/python3"
+                        print_success "Python 3.11 installed locally at: $PYTHON_CMD"
+                    else
+                        print_warning "Local Python extraction failed, using system Python"
+                        PYTHON_CMD="$CURRENT_PYTHON"
+                    fi
+                fi
+            else
+                print_warning "Failed to download Python, using system Python"
+                PYTHON_CMD="$CURRENT_PYTHON"
+            fi
+
+        elif [ "$OS" == "windows" ]; then
+            print_status "Downloading portable Python 3.11 for Windows..."
+
+            # Download portable/embeddable Python from official source
+            if command -v curl &>/dev/null; then
+                curl -L -o python311-windows.zip "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
+            else
+                wget -O python311-windows.zip "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
+            fi
+
+            if [ -f "python311-windows.zip" ]; then
+                print_status "Extracting portable Python..."
+                mkdir -p python311
+                unzip -q python311-windows.zip -d python311
+                rm -f python311-windows.zip
+
+                # Also get and install pip
+                print_status "Setting up pip for portable Python..."
+                if command -v curl &>/dev/null; then
+                    curl -L -o get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+                else
+                    wget -O get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+                fi
+
+                if [ -f "python311/python.exe" ] && [ -f "get-pip.py" ]; then
+                    # Install pip
+                    ./python311/python.exe get-pip.py
+                    rm -f get-pip.py
+
+                    PYTHON_CMD="./python311/python.exe"
+                    print_success "Portable Python 3.11 installed locally at: $PYTHON_CMD"
+                    print_warning "Note: Using embedded Python on Windows. Some advanced features may be limited."
+                    print_warning "For full functionality, consider installing Python 3.11 system-wide."
+                else
+                    print_warning "Portable Python setup failed, using system Python"
+                    PYTHON_CMD="$CURRENT_PYTHON"
+                    rm -f get-pip.py
+                fi
+            else
+                print_warning "Failed to download portable Python, using system Python"
+                PYTHON_CMD="$CURRENT_PYTHON"
+            fi
+        fi
+    else
+        # User chose not to install 3.11
+        PYTHON_CMD="$CURRENT_PYTHON"
+        if [ "$CURRENT_MINOR" -ge 12 ]; then
+            print_warning "Using Python 3.12+ - applying compatibility fixes for some packages"
+        fi
+    fi
+else
+    # We're already using Python 3.11 system-wide
+    PYTHON_CMD="$CURRENT_PYTHON"
+    print_success "Using system Python 3.11 for optimal compatibility"
+fi
+
+# Verify we can use the chosen Python
+if ! $PYTHON_CMD --version &>/dev/null; then
+    print_warning "Chosen Python not accessible, falling back to system Python"
+    PYTHON_CMD="$CURRENT_PYTHON"
+fi
+
+FINAL_VERSION=$($PYTHON_CMD --version 2>&1 | cut -d' ' -f2)
+FINAL_MINOR=$(echo $FINAL_VERSION | cut -d'.' -f2)
+print_success "Using Python $FINAL_VERSION for virtual environment"
+
+# Apply compatibility fixes if using Python 3.12+
+COMPATIBILITY_MODE=0
+if [ "$FINAL_MINOR" -ge 12 ]; then
+    print_warning "Python 3.12+ detected - enabling compatibility mode"
+    COMPATIBILITY_MODE=1
 fi
 
 # Check for Git
@@ -71,17 +279,6 @@ if ! command -v git &>/dev/null; then
     exit 1
 fi
 print_success "Git found: $(git --version)"
-
-print_success "Found Python $PYTHON_VERSION"
-
-# Check Python version
-PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d'.' -f1)
-PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d'.' -f2)
-
-if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 8 ]); then
-    print_error "Python 3.8 or higher is required. Found: $PYTHON_VERSION"
-    exit 1
-fi
 
 # Install system dependencies
 print_status "Installing system dependencies..."
@@ -181,7 +378,7 @@ fi
 
 if [ ! -d "venv" ]; then
     print_status "Creating virtual environment..."
-    $PYTHON -m venv venv
+    $PYTHON_CMD -m venv venv
     if [ $? -ne 0 ]; then
         print_error "Failed to create virtual environment!"
         exit 1
@@ -211,7 +408,7 @@ print_success "Virtual environment activated: $VIRTUAL_ENV"
 
 # Upgrade pip and install build tools
 print_status "Setting up Python build environment..."
-$PYTHON -m pip install --upgrade pip setuptools wheel
+$PYTHON_CMD -m pip install --upgrade pip setuptools wheel
 if [ $? -ne 0 ]; then
     print_error "Failed to upgrade pip/setuptools/wheel!"
     exit 1
@@ -245,14 +442,32 @@ else
     exit 1
 fi
 
-# Install training requirements
+# Install training requirements with compatibility handling
 print_status "Installing training dependencies..."
-if [ -f "requirements_training.txt" ]; then
-    pip install -r requirements_training.txt
+
+if [ $COMPATIBILITY_MODE -eq 1 ]; then
+    print_warning "Applying Python 3.12+ compatibility fixes..."
+
+    if [ -f "requirements_training.txt" ]; then
+        # Create compatible requirements file
+        grep -v "montreal-forced-alignment" requirements_training.txt | \
+        sed 's/^phonemizer$/phonemizer==3.3.0/' > requirements_training_compatible.txt
+        pip install -r requirements_training_compatible.txt
+        rm -f requirements_training_compatible.txt
+    else
+        # Install compatible versions individually
+        pip install transformers datasets accelerate evaluate librosa soundfile scipy scikit-learn
+        pip install tensorboard wandb phonemizer==3.3.0
+        print_warning "Skipped montreal-forced-alignment (not compatible with Python 3.12+)"
+    fi
 else
-    print_warning "requirements_training.txt not found, installing training packages individually..."
-    pip install transformers datasets accelerate evaluate librosa soundfile scipy scikit-learn
-    pip install tensorboard wandb phonemizer montreal-forced-alignment
+    # Normal installation for Python 3.11 and below
+    if [ -f "requirements_training.txt" ]; then
+        pip install -r requirements_training.txt
+    else
+        pip install transformers datasets accelerate evaluate librosa soundfile scipy scikit-learn
+        pip install tensorboard wandb phonemizer montreal-forced-alignment
+    fi
 fi
 
 # Install TTS-specific dependencies
@@ -416,7 +631,7 @@ chmod +x test_installation.py
 
 # Run installation test and collect results
 print_status "Running installation test..."
-$PYTHON test_installation.py
+$PYTHON_CMD test_installation.py
 INSTALLATION_TEST_RESULT=$?
 
 # Initialize installation summary
@@ -428,28 +643,28 @@ SUCCESSFUL_COMPONENTS=""
 print_status "Verifying installation components..."
 
 # Check core components
-if python -c "import fastapi, uvicorn, pydub, numpy, pandas" 2>/dev/null; then
+if $PYTHON_CMD -c "import fastapi, uvicorn, pydub, numpy, pandas" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Core Dependencies"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS Core Dependencies"
 fi
 
 # Check training components
-if python -c "import torch, torchaudio, transformers, datasets, librosa, soundfile, scipy, sklearn" 2>/dev/null; then
+if $PYTHON_CMD -c "import torch, torchaudio, transformers, datasets, librosa, soundfile, scipy, sklearn" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Training Dependencies"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS Training Dependencies"
 fi
 
 # Check TTS components
-if python -c "import piper, phonemizer" 2>/dev/null; then
+if $PYTHON_CMD -c "import piper, phonemizer" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS TTS Dependencies"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS TTS Dependencies"
 fi
 
 # Check Piper training
-if python -c "import piper_train" 2>/dev/null; then
+if $PYTHON_CMD -c "import piper_train" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Piper Training"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS Piper Training"
@@ -483,6 +698,7 @@ fi
 
 # Check if training dependencies are available
 echo "Checking training dependencies..."
+# Note: 'python' here refers to the virtual environment's Python
 python test_installation.py
 
 if [ $? -ne 0 ]; then
@@ -492,6 +708,7 @@ fi
 
 # Launch the application
 echo "🚀 Launching Coaxial Recorder..."
+# Note: 'python' here refers to the virtual environment's Python
 python app.py
 EOF
 
@@ -506,6 +723,7 @@ echo Activating virtual environment...
 call venv\Scripts\activate
 
 echo Checking training dependencies...
+REM Note: 'python' here refers to the virtual environment's Python
 python test_installation.py
 
 if %errorlevel% neq 0 (
@@ -514,6 +732,7 @@ if %errorlevel% neq 0 (
 )
 
 echo 🚀 Launching Coaxial Recorder...
+REM Note: 'python' here refers to the virtual environment's Python
 python app.py
 pause
 EOF
@@ -576,7 +795,7 @@ else
 fi
 echo ""
 echo "3. Or test the installation:"
-echo "   python test_installation.py"
+echo "   $PYTHON_CMD test_installation.py"
 echo ""
 
 if [ "$OS" == "windows" ]; then
