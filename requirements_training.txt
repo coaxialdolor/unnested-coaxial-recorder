@@ -25,7 +25,11 @@ wandb>=0.15.0
 phonemizer>=3.2.0
 
 # Montreal Forced Aligner (MFA)
-montreal-forced-alignment>=2.2.0
+# Note: MFA has complex dependencies that limit Python version compatibility
+# - MFA 2.x: Python 3.8-3.9 only
+# - MFA 3.x: Python 3.10-3.11
+# - MFA does not support Python 3.12+
+montreal-forced-alignment>=3.0.0
 
 # Additional utilities
 tqdm>=4.65.0
