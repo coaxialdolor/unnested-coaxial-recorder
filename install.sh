@@ -87,6 +87,12 @@ if [ "$OS" == "macos" ]; then
     print_status "Installing system packages via Homebrew..."
     brew install espeak-ng ffmpeg portaudio
 
+    # Ensure espeak symlink exists for phonemizer compatibility
+    if [ ! -L "/opt/homebrew/bin/espeak" ] && [ -f "/opt/homebrew/bin/espeak-ng" ]; then
+        print_status "Creating espeak symlink for phonemizer compatibility..."
+        ln -sf /opt/homebrew/bin/espeak-ng /opt/homebrew/bin/espeak
+    fi
+
     # Install MFA via conda (recommended method)
     print_status "Installing Montreal Forced Aligner (MFA)..."
     if command -v conda &>/dev/null; then
@@ -103,6 +109,12 @@ elif [ "$OS" == "linux" ]; then
         sudo apt-get update
         sudo apt-get install -y espeak-ng ffmpeg portaudio19-dev python3-dev build-essential
 
+        # Create espeak symlink for phonemizer compatibility
+        if [ ! -L "/usr/bin/espeak" ] && [ -f "/usr/bin/espeak-ng" ]; then
+            print_status "Creating espeak symlink for phonemizer compatibility..."
+            sudo ln -sf /usr/bin/espeak-ng /usr/bin/espeak
+        fi
+
         # Install MFA via conda (recommended method)
         print_status "Installing Montreal Forced Aligner (MFA)..."
         if command -v conda &>/dev/null; then
@@ -116,6 +128,12 @@ elif [ "$OS" == "linux" ]; then
         print_status "Installing system packages via yum..."
         sudo yum install -y espeak-ng ffmpeg portaudio-devel python3-devel gcc gcc-c++
 
+        # Create espeak symlink for phonemizer compatibility
+        if [ ! -L "/usr/bin/espeak" ] && [ -f "/usr/bin/espeak-ng" ]; then
+            print_status "Creating espeak symlink for phonemizer compatibility..."
+            sudo ln -sf /usr/bin/espeak-ng /usr/bin/espeak
+        fi
+
         # Install MFA
         print_status "Installing Montreal Forced Aligner (MFA)..."
         if command -v conda &>/dev/null; then
@@ -128,6 +146,12 @@ elif [ "$OS" == "linux" ]; then
         print_status "Installing system packages via pacman..."
         sudo pacman -S --noconfirm espeak-ng ffmpeg portaudio python
 
+        # Create espeak symlink for phonemizer compatibility
+        if [ ! -L "/usr/bin/espeak" ] && [ -f "/usr/bin/espeak-ng" ]; then
+            print_status "Creating espeak symlink for phonemizer compatibility..."
+            sudo ln -sf /usr/bin/espeak-ng /usr/bin/espeak
+        fi
+
         # Install MFA
         print_status "Installing Montreal Forced Aligner (MFA)..."
         if command -v conda &>/dev/null; then
@@ -139,12 +163,14 @@ elif [ "$OS" == "linux" ]; then
     else
         print_warning "Could not detect package manager. Please install espeak-ng, ffmpeg, and portaudio manually."
         print_warning "Also install MFA: pip install montreal-forced-alignment"
+        print_warning "Create symlink: ln -sf /usr/bin/espeak-ng /usr/bin/espeak"
     fi
 
 elif [ "$OS" == "windows" ]; then
     print_warning "Windows detected. Please ensure you have Visual Studio Build Tools installed."
     print_warning "You may need to install espeak-ng and ffmpeg manually or via conda."
     print_warning "For MFA, use: conda install -c conda-forge montreal-forced-alignment"
+    print_warning "For espeak, install via conda: conda install -c conda-forge espeak"
 fi
 
 # Create virtual environment
@@ -218,6 +244,22 @@ if [ -f "requirements.txt" ]; then
 else
     print_error "requirements.txt not found!"
     exit 1
+fi
+
+# Install TTS-specific dependencies
+print_status "Installing TTS dependencies..."
+pip install piper-tts phonemizer
+
+# Verify espeak installation
+print_status "Verifying espeak installation..."
+if command -v espeak &>/dev/null; then
+    print_success "espeak found: $(which espeak)"
+    espeak --version 2>/dev/null || echo "espeak version check failed"
+elif command -v espeak-ng &>/dev/null; then
+    print_success "espeak-ng found: $(which espeak-ng)"
+    espeak-ng --version 2>/dev/null || echo "espeak-ng version check failed"
+else
+    print_warning "espeak/espeak-ng not found in PATH"
 fi
 
 # Download and setup Piper TTS

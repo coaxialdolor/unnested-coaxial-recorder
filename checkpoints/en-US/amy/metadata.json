@@ -1,0 +1,14 @@
+{
+  "downloaded": true,
+  "download_time": "2025-01-11T20:00:00",
+  "file_size_bytes": 63201294,
+  "checkpoint_path": "checkpoints/en-US/amy/en_US-amy-medium.onnx",
+  "config_path": "checkpoints/en-US/amy/en_US-amy-medium.onnx.json",
+  "voice_id": "amy",
+  "name": "Amy",
+  "gender": "Female",
+  "dataset": "LJSpeech",
+  "quality": "Medium",
+  "phoneme_type": "en-us-mfa",
+  "description": "Medium quality female voice"
+}

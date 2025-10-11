@@ -1,0 +1,127 @@
+🎙️ PIPER TTS TRAINING PROCESS FLOW
+=====================================
+
+📝 STEP 1: RECORDING
+┌─────────────────────────────────────────────────────────────┐
+│  User reads sentences → Browser records audio → Save to disk │
+│                                                             │
+│  Files created:                                             │
+│  voices/{profile}/recordings/0001_sv-SE_Chat_20251011.wav  │
+│  voices/{profile}/metadata.jsonl                           │
+│  voices/{profile}/progress.json                            │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+🧼 STEP 2: POST-PROCESSING
+┌─────────────────────────────────────────────────────────────┐
+│  Clean audio → Normalize volume → Trim silence → Add padding │
+│                                                             │
+│  Files modified:                                            │
+│  voices/{profile}/recordings/*.wav (processed)             │
+│  voices/{profile}/backups/*.wav.backup (originals)         │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+📤 STEP 3: EXPORT
+┌─────────────────────────────────────────────────────────────┐
+│  Convert format → Export with metadata → Create ZIP archive │
+│                                                             │
+│  Files created:                                             │
+│  exports/{profile}_{list}_{timestamp}/                     │
+│  ├── audio/*.wav, *.mp3, *.flac, *.ogg                    │
+│  ├── metadata.json                                         │
+│  ├── transcripts.txt                                       │
+│  └── dataset.zip                                           │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+🧠 STEP 4: TRAINING
+┌─────────────────────────────────────────────────────────────┐
+│  Prepare dataset → Convert phonemes → Align audio → Train   │
+│                                                             │
+│  Files created:                                             │
+│  training_output/{model_name}/                             │
+│  ├── dataset/audio/, phonemes/, alignment/                 │
+│  ├── checkpoints/epoch_*.ckpt                              │
+│  ├── logs/training.log                                     │
+│  └── final_model/model.ckpt, config.json, onnx_model.onnx │
+└─────────────────────────────────────────────────────────────┘
+                                ↓
+🗣️ STEP 5: SYNTHESIS
+┌─────────────────────────────────────────────────────────────┐
+│  Load model → Convert text → Generate speech → Output audio │
+│                                                             │
+│  Files created:                                             │
+│  synthesis_output/generated_audio.wav                      │
+│  synthesis_output/phonemes.txt                             │
+│  synthesis_output/timing.json                              │
+└─────────────────────────────────────────────────────────────┘
+
+🔧 TECHNICAL COMPONENTS
+=======================
+
+Frontend (Web Interface):
+├── /templates/record.html      → Recording interface
+├── /templates/postprocess.html → Post-processing interface
+├── /templates/export.html      → Export interface
+├── /templates/train.html       → Training interface
+└── /static/js/recorder.js      → Audio recording logic
+
+Backend (API & Processing):
+├── app.py                      → Main FastAPI application
+├── train_model.py              → Training script
+└── utils/
+    ├── audio.py               → Audio processing utilities
+    ├── phonemes.py            → Phoneme conversion system
+    ├── mfa.py                 → Montreal Forced Aligner
+    └── checkpoints.py         → Pre-trained model management
+
+Data Storage:
+├── voices/                    → User recordings
+├── exports/                   → Exported datasets
+├── training_output/           → Training results
+└── checkpoints/               → Pre-trained models
+
+🎯 KEY PROCESSES
+================
+
+1. RECORDING:
+   - User reads prompts from web interface
+   - Browser captures audio via MediaRecorder API
+   - Audio saved as WAV files with metadata
+   - Progress tracked in JSON files
+
+2. POST-PROCESSING:
+   - Audio normalized to consistent volume
+   - Silence trimmed from start/end
+   - Consistent padding added
+   - Original files backed up
+
+3. EXPORT:
+   - Audio converted to various formats
+   - Metadata and transcripts included
+   - ZIP archives created for distribution
+   - Multiple quality options available
+
+4. TRAINING:
+   - Text converted to phonemes using eSpeak NG
+   - Audio aligned with phonemes using MFA
+   - Model trained with PyTorch/Piper
+   - Checkpoints saved at intervals
+
+5. SYNTHESIS:
+   - Trained model loads phoneme sequences
+   - Neural network generates audio
+   - Output saved as WAV files
+   - Ready for use in applications
+
+🚀 GETTING STARTED
+==================
+
+1. Start the app: python app.py
+2. Go to: http://localhost:8000
+3. Create voice profile
+4. Record sentences
+5. Post-process audio
+6. Export dataset
+7. Train model
+8. Generate speech!
+
+The complete pipeline is now automated and user-friendly! 🎉

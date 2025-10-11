@@ -61,4 +61,5 @@ htmlcov/
 
 # Voice data (uncomment if you want to exclude voice recordings)
 # voices/*/recordings/
-# voices/*/clips/
+# voices/*/clips/test_audio/
+converted_models/

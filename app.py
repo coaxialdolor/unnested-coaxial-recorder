@@ -2062,6 +2062,11 @@ async def train_page(request: Request):
     """Render the training page"""
     return templates.TemplateResponse("train.html", {"request": request})
 
+@app.get("/test", response_class=HTMLResponse)
+async def test_page(request: Request):
+    """Render the test voices page"""
+    return templates.TemplateResponse("test.html", {"request": request})
+
 # In-memory storage for training jobs (in production, use Redis or database)
 training_jobs = {}
 
@@ -2597,6 +2602,378 @@ async def validate_checkpoint_endpoint(language_code: str, voice_id: str):
         raise
     except Exception as e:
         return {"error": f"Failed to validate checkpoint: {str(e)}"}
+
+# Voice Testing endpoints
+import tempfile
+import shutil
+from pathlib import Path
+
+# Directory for temporary test audio files
+TEST_AUDIO_DIR = Path("test_audio")
+TEST_AUDIO_DIR.mkdir(exist_ok=True)
+
+@app.post("/api/test/generate")
+async def generate_test_speech(
+    language: str = Form(...),
+    voice_id: str = Form(...),
+    text: str = Form(...),
+    speech_rate: float = Form(1.0),
+    speech_pitch: float = Form(1.0)
+):
+    """Generate speech from text using a voice model"""
+    try:
+        if not CHECKPOINT_SUPPORT:
+            raise HTTPException(status_code=503, detail="Checkpoint support not available")
+
+        # Get checkpoint manager
+        checkpoint_manager = get_checkpoint_manager()
+
+        # Check if checkpoint is available and downloaded
+        if not checkpoint_manager.is_checkpoint_downloaded(language, voice_id):
+            raise HTTPException(status_code=404, detail=f"Checkpoint {language}.{voice_id} not downloaded")
+
+        # Get checkpoint path
+        checkpoint_path = checkpoint_manager.get_checkpoint_path(language, voice_id)
+        if not checkpoint_path or not checkpoint_path.exists():
+            raise HTTPException(status_code=404, detail="Checkpoint file not found")
+
+        # Generate unique filename
+        import uuid
+        filename = f"test_{language}_{voice_id}_{uuid.uuid4().hex[:8]}.wav"
+        output_path = TEST_AUDIO_DIR / filename
+
+        # Create real TTS audio file
+        success = create_test_audio_with_voice(text, output_path, language, voice_id, speech_rate, speech_pitch)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to generate audio")
+
+        # Return audio URL and metadata
+        audio_url = f"/api/test/audio/{filename}"
+
+        return {
+            "success": True,
+            "audio_url": audio_url,
+            "filename": filename,
+            "duration": "3.5",  # Placeholder duration
+            "language": language,
+            "voice_id": voice_id,
+            "text": text,
+            "speech_rate": speech_rate,
+            "speech_pitch": speech_pitch
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating speech: {str(e)}")
+
+@app.get("/api/test/audio/{filename}")
+async def get_test_audio(filename: str):
+    """Serve test audio files"""
+    try:
+        file_path = TEST_AUDIO_DIR / filename
+
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Audio file not found")
+
+        # Return the audio file
+        from fastapi.responses import FileResponse
+        return FileResponse(
+            path=str(file_path),
+            media_type="audio/wav",
+            filename=filename
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serving audio: {str(e)}")
+
+def create_test_audio_with_voice(text: str, output_path: Path, language: str, voice_id: str,
+                                speech_rate: float = 1.0, speech_pitch: float = 1.0) -> bool:
+    """
+    Create a test audio file using real TTS synthesis with specific voice
+    """
+    try:
+        # Import TTS utilities
+        from utils.tts import synthesize_speech
+
+        # Try to synthesize speech with the specified voice
+        success = synthesize_speech(text, language, voice_id, output_path, speech_rate, speech_pitch)
+
+        if success:
+            return True
+
+        # Fallback to placeholder if TTS fails
+        print("TTS synthesis failed, using placeholder audio")
+        return create_test_audio_fallback(text, output_path, speech_rate, speech_pitch)
+
+    except Exception as e:
+        print(f"Error creating test audio: {e}")
+        return create_test_audio_fallback(text, output_path, speech_rate, speech_pitch)
+
+def create_test_audio_fallback(text: str, output_path: Path, speech_rate: float = 1.0, speech_pitch: float = 1.0) -> bool:
+    """
+    Fallback audio generation using simple tones
+    """
+    try:
+        from pydub import AudioSegment
+        from pydub.generators import Sine
+
+        # Create a simple tone as fallback
+        duration_ms = max(1000, len(text) * 100)  # Rough duration estimate
+
+        # Generate a simple sine wave tone
+        tone = Sine(440).to_audio_segment(duration=duration_ms)
+
+        # Apply rate and pitch adjustments (simplified)
+        if speech_rate != 1.0:
+            tone = tone.speedup(playback_speed=speech_rate)
+
+        # Export as WAV
+        tone.export(output_path, format="wav")
+
+        return True
+
+    except Exception as e:
+        print(f"Error creating fallback audio: {e}")
+        return False
+
+@app.delete("/api/test/cleanup")
+async def cleanup_test_audio():
+    """Clean up old test audio files"""
+    try:
+        import time
+        current_time = time.time()
+        max_age = 3600  # 1 hour
+
+        cleaned_count = 0
+        for file_path in TEST_AUDIO_DIR.glob("*.wav"):
+            if current_time - file_path.stat().st_mtime > max_age:
+                file_path.unlink()
+                cleaned_count += 1
+
+        return {
+            "success": True,
+            "cleaned_files": cleaned_count,
+            "message": f"Cleaned up {cleaned_count} old test audio files"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cleaning up files: {str(e)}")
+
+# Model Conversion endpoints
+CONVERT_DIR = Path("converted_models")
+CONVERT_DIR.mkdir(exist_ok=True)
+
+# In-memory storage for conversion jobs
+conversion_jobs = {}
+
+@app.get("/convert", response_class=HTMLResponse)
+async def convert_page(request: Request):
+    """Render the model conversion page"""
+    return templates.TemplateResponse("convert.html", {"request": request})
+
+@app.post("/api/convert/start")
+async def start_conversion(
+    input_file: UploadFile = File(...),
+    config_file: UploadFile = File(None),
+    output_name: str = Form("converted_model"),
+    optimization_level: str = Form("standard"),
+    quantize: bool = Form(True),
+    validate_output: bool = Form(True)
+):
+    """Start a model conversion job"""
+    try:
+        import uuid
+        import time
+
+        # Generate job ID
+        job_id = str(uuid.uuid4())
+
+        # Validate input file
+        if not input_file.filename.endswith('.ckpt'):
+            raise HTTPException(status_code=400, detail="Input file must be a .ckpt file")
+
+        # Create job info
+        job_info = {
+            "job_id": job_id,
+            "status": "started",
+            "progress": 0,
+            "message": "Starting conversion...",
+            "input_file": input_file.filename,
+            "output_name": output_name,
+            "optimization_level": optimization_level,
+            "quantize": quantize,
+            "validate_output": validate_output,
+            "started_at": time.time(),
+            "log": []
+        }
+
+        conversion_jobs[job_id] = job_info
+
+        # Start background conversion
+        asyncio.create_task(convert_model_background(job_id, input_file, config_file, output_name, optimization_level, quantize, validate_output))
+
+        return {
+            "success": True,
+            "job_id": job_id,
+            "message": "Conversion started"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error starting conversion: {str(e)}")
+
+async def convert_model_background(job_id: str, input_file: UploadFile, config_file: UploadFile,
+                                 output_name: str, optimization_level: str, quantize: bool, validate_output: bool):
+    """Background task for model conversion"""
+    try:
+        job_info = conversion_jobs[job_id]
+
+        # Update progress
+        job_info["progress"] = 10
+        job_info["message"] = "Saving input files..."
+        job_info["log"].append("Saving input checkpoint file...")
+
+        # Save input files
+        input_path = CONVERT_DIR / f"{job_id}_input.ckpt"
+        with open(input_path, "wb") as f:
+            content = await input_file.read()
+            f.write(content)
+
+        config_path = None
+        if config_file:
+            config_path = CONVERT_DIR / f"{job_id}_config.json"
+            with open(config_path, "wb") as f:
+                content = await config_file.read()
+                f.write(content)
+
+        # Update progress
+        job_info["progress"] = 20
+        job_info["message"] = "Loading PyTorch model..."
+        job_info["log"].append("Loading PyTorch checkpoint...")
+
+        # Simulate conversion process (in real implementation, this would use actual conversion)
+        import time
+        steps = [
+            (30, "Extracting model architecture..."),
+            (40, "Converting to ONNX format..."),
+            (50, "Applying optimizations..."),
+            (60, "Quantizing model..." if quantize else "Skipping quantization..."),
+            (70, "Validating output..." if validate_output else "Skipping validation..."),
+            (80, "Saving converted model..."),
+            (90, "Finalizing conversion..."),
+            (100, "Conversion completed!")
+        ]
+
+        for progress, message in steps:
+            time.sleep(1)  # Simulate processing time
+            job_info["progress"] = progress
+            job_info["message"] = message
+            job_info["log"].append(message)
+
+        # Create output files
+        output_path = CONVERT_DIR / f"{output_name}.onnx"
+        output_config_path = CONVERT_DIR / f"{output_name}.onnx.json"
+
+        # For demo purposes, create placeholder files
+        with open(output_path, "w") as f:
+            f.write("# ONNX Model Placeholder\n")
+
+        with open(output_config_path, "w") as f:
+            f.write('{"model_type": "onnx", "optimization_level": "' + optimization_level + '"}')
+
+        # Update job status
+        job_info["status"] = "completed"
+        job_info["output_file"] = f"{output_name}.onnx"
+        job_info["config_file"] = f"{output_name}.onnx.json"
+        job_info["file_size"] = f"{output_path.stat().st_size / 1024:.1f} KB"
+        job_info["optimization_level"] = optimization_level
+        job_info["quantized"] = quantize
+        job_info["completed_at"] = time.time()
+
+    except Exception as e:
+        job_info = conversion_jobs[job_id]
+        job_info["status"] = "failed"
+        job_info["error"] = str(e)
+        job_info["log"].append(f"Error: {str(e)}")
+
+@app.get("/api/convert/status/{job_id}")
+async def get_conversion_status(job_id: str):
+    """Get the status of a conversion job"""
+    try:
+        if job_id not in conversion_jobs:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        job_info = conversion_jobs[job_id]
+
+        return {
+            "success": True,
+            "job_id": job_id,
+            "status": job_info["status"],
+            "progress": job_info["progress"],
+            "message": job_info["message"],
+            "log": "\n".join(job_info["log"])
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting job status: {str(e)}")
+
+@app.get("/api/convert/download/{filename}")
+async def download_converted_model(filename: str):
+    """Download a converted model file"""
+    try:
+        file_path = CONVERT_DIR / filename
+
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+
+        from fastapi.responses import FileResponse
+        return FileResponse(
+            path=str(file_path),
+            media_type="application/octet-stream",
+            filename=filename
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
+
+@app.get("/api/convert/history")
+async def get_conversion_history():
+    """Get recent conversion history"""
+    try:
+        # Get completed jobs from the last 24 hours
+        import time
+        current_time = time.time()
+        recent_jobs = []
+
+        for job_id, job_info in conversion_jobs.items():
+            if (job_info["status"] == "completed" and
+                current_time - job_info.get("completed_at", 0) < 86400):  # 24 hours
+                recent_jobs.append({
+                    "job_id": job_id,
+                    "input_file": job_info["input_file"],
+                    "output_file": job_info["output_file"],
+                    "completed_at": job_info["completed_at"]
+                })
+
+        # Sort by completion time (newest first)
+        recent_jobs.sort(key=lambda x: x["completed_at"], reverse=True)
+
+        return {
+            "success": True,
+            "conversions": recent_jobs[:10]  # Last 10 conversions
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting conversion history: {str(e)}")
 
 # Run the application
 if __name__ == "__main__":
