@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Fixed installer for Coaxial Recorder with Piper TTS Training
 # This script properly sets up the virtual environment first, then installs everything
@@ -6,35 +6,54 @@
 
 set -e  # Exit on any error
 
+# Detect the shell and set up echo command appropriately
+if [ -n "$BASH_VERSION" ]; then
+    ECHO_CMD="echo -e"
+elif command -v printf >/dev/null 2>&1; then
+    # Fallback to printf which is more portable
+    ECHO_CMD="printf '%b\n'"
+else
+    # Last resort: plain echo without colors
+    ECHO_CMD="echo"
+fi
+
 echo "🚀 Installing Coaxial Recorder with Piper TTS Training Support (Fixed Version)"
 echo "============================================================================="
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Colors for output (only if terminal supports it)
+if [ -t 1 ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    NC=''
+fi
 
-# Function to print colored output
+# Function to print colored output (works with any shell)
 print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    printf "%b[INFO]%b %s\n" "$BLUE" "$NC" "$1"
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    printf "%b[SUCCESS]%b %s\n" "$GREEN" "$NC" "$1"
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    printf "%b[WARNING]%b %s\n" "$YELLOW" "$NC" "$1"
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    printf "%b[ERROR]%b %s\n" "$RED" "$NC" "$1"
 }
 
 # Check if running on macOS, Linux, or Windows
