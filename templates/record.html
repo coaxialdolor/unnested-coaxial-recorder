@@ -67,7 +67,7 @@
                                 </label>
                             </div>
                         </div>
-                        
+
                         <!-- Recording Controls -->
                         <div class="mb-3">
                             <button id="doneRecordingBtn" class="btn btn-primary btn-sm w-100 mb-2" onclick="doneRecording()">
@@ -83,7 +83,7 @@
                         <div class="text-center">
                             <span id="progressText">0 / 0 recorded</span>
                         </div>
-                        
+
                         <!-- Recording Statistics -->
                         <div class="mt-3">
                             <h6 class="mb-2">Recording Statistics</h6>
@@ -106,7 +106,7 @@
                         <div id="currentPrompt" class="alert alert-info">
                             <p class="mb-0">Please select a voice profile and prompt list to begin recording.</p>
                         </div>
-                        
+
                         <div class="text-center my-4">
                             <button id="prevButton" class="btn btn-outline-secondary me-2" onclick="previousPrompt()" disabled>
                                 <i class="fas fa-backward me-2"></i>Previous
@@ -122,7 +122,7 @@
                         <div id="recordingStatus" class="alert alert-warning d-none">
                             <i class="fas fa-circle text-danger me-2"></i>Recording in progress...
                         </div>
-                        
+
                         <!-- Input Level Indicator -->
                         <div id="inputLevelContainer" class="d-none mb-3">
                             <label class="form-label">Input Level</label>
@@ -136,7 +136,7 @@
                                 </span>
                             </div>
                         </div>
-                        
+
                         <!-- Waveform Visualization -->
                         <div id="waveformContainer" class="d-none mb-3">
                             <label class="form-label">Recording Waveform</label>
@@ -148,11 +148,11 @@
                             <!-- Custom Waveform Player -->
                             <div class="waveform-player">
                                 <canvas id="playbackWaveform" class="w-100 border rounded" style="height: 80px; cursor: pointer;"></canvas>
-                                <audio id="playbackAudio" style="display: none;"></audio>
+                                <audio id="playbackAudio" style="display: none;" preload="metadata" playsinline webkit-playsinline></audio>
                                 <div class="d-flex justify-content-between align-items-center mt-1">
                                     <small class="text-muted" id="playbackTime">0:00 / 0:00</small>
                                     <div>
-                                        <button class="btn btn-sm btn-outline-primary me-1" onclick="togglePlayback()">
+                                        <button class="btn btn-sm btn-outline-primary me-1" onclick="togglePlayback()" id="playButton">
                                             <i id="playbackIcon" class="fas fa-play"></i>
                                         </button>
                                         <button class="btn btn-sm btn-outline-secondary" onclick="stopPlayback()">
@@ -202,7 +202,7 @@
         let currentProfileId = '';
         let currentPromptListId = '';
         let recordedPrompts = new Set(); // Track which prompts have been recorded
-        
+
         // Audio visualization
         let audioContext;
         let analyser;
@@ -213,9 +213,35 @@
         let clippingCount = 0;
         let isClipping = false;
 
+        // Safari detection
+        function isSafari() {
+            return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        }
+
         // Load voice profiles on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadVoiceProfiles();
+
+            // Safari-specific initialization
+            if (isSafari()) {
+                console.log('Safari detected - enabling compatibility mode');
+                // Add Safari-specific CSS or behavior if needed
+            }
+
+            // Enable audio context on first user interaction (required by Safari)
+            let audioContextEnabled = false;
+            function enableAudioContext() {
+                if (!audioContextEnabled && audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        console.log('Audio context resumed');
+                        audioContextEnabled = true;
+                    });
+                }
+            }
+
+            // Add click listeners to enable audio context
+            document.addEventListener('click', enableAudioContext, { once: true });
+            document.addEventListener('touchstart', enableAudioContext, { once: true });
         });
 
         function loadVoiceProfiles() {
@@ -257,7 +283,7 @@
                 else if (text.includes('🇮🇹')) selectedLanguage = 'it-IT';
             }
 
-            const url = selectedLanguage ? 
+            const url = selectedLanguage ?
                 `/api/recording_stats/${currentProfileId}?selected_language=${selectedLanguage}` :
                 `/api/recording_stats/${currentProfileId}`;
 
@@ -271,7 +297,7 @@
 
         function displayRecordingStats(stats) {
             const statsContainer = document.getElementById('recordingStats');
-            
+
             if (stats.length === 0) {
                 statsContainer.innerHTML = `
                     <div class="text-center text-muted">
@@ -283,17 +309,17 @@
 
             let html = '';
             stats.forEach(stat => {
-                const language = stat.language_code.startsWith('en-US') ? '🇺🇸' : 
-                               stat.language_code.startsWith('en-GB') ? '🇬🇧' : 
-                               stat.language_code.startsWith('sv-SE') ? '🇸🇪' : 
+                const language = stat.language_code.startsWith('en-US') ? '🇺🇸' :
+                               stat.language_code.startsWith('en-GB') ? '🇬🇧' :
+                               stat.language_code.startsWith('sv-SE') ? '🇸🇪' :
                                stat.language_code.startsWith('it-IT') ? '🇮🇹' : '';
-                
+
                 const category = stat.prompt_list.includes('General') ? 'General' :
                                stat.prompt_list.includes('Chat') ? 'Chat' :
                                stat.prompt_list.includes('CustomerService') ? 'Customer Service' : stat.prompt_list;
-                
+
                 const percentage = stat.total > 0 ? Math.round((stat.recorded / stat.total) * 100) : 0;
-                
+
                 html += `
                     <div class="mb-2">
                         <div class="d-flex justify-content-between align-items-center">
@@ -306,7 +332,7 @@
                     </div>
                 `;
             });
-            
+
             statsContainer.innerHTML = html;
         }
 
@@ -326,9 +352,9 @@
                         const option = document.createElement('option');
                         option.value = prompt.id;
                         // Show language and prompt count in the dropdown
-                        const language = prompt.name.startsWith('en-US_') ? '🇺🇸' : 
-                                       prompt.name.startsWith('en-GB_') ? '🇬🇧' : 
-                                       prompt.name.startsWith('sv-SE_') ? '🇸🇪' : 
+                        const language = prompt.name.startsWith('en-US_') ? '🇺🇸' :
+                                       prompt.name.startsWith('en-GB_') ? '🇬🇧' :
+                                       prompt.name.startsWith('sv-SE_') ? '🇸🇪' :
                                        prompt.name.startsWith('it-IT_') ? '🇮🇹' : '';
                         const category = prompt.name.includes('General') ? 'General' :
                                        prompt.name.includes('Chat') ? 'Chat' :
@@ -357,9 +383,9 @@
                         const option = document.createElement('option');
                         option.value = prompt.id;
                         // Show language and prompt count in the dropdown
-                        const language = prompt.name.startsWith('en-US_') ? '🇺🇸' : 
-                                       prompt.name.startsWith('en-GB_') ? '🇬🇧' : 
-                                       prompt.name.startsWith('sv-SE_') ? '🇸🇪' : 
+                        const language = prompt.name.startsWith('en-US_') ? '🇺🇸' :
+                                       prompt.name.startsWith('en-GB_') ? '🇬🇧' :
+                                       prompt.name.startsWith('sv-SE_') ? '🇸🇪' :
                                        prompt.name.startsWith('it-IT_') ? '🇮🇹' : '';
                         const category = prompt.name.includes('General') ? 'General' :
                                        prompt.name.includes('Chat') ? 'Chat' :
@@ -367,10 +393,10 @@
                         option.textContent = `${language} ${category} (${prompt.prompt_count} prompts)`;
                         select.appendChild(option);
                     });
-                    
+
                     // Load recording statistics
                     loadRecordingStats();
-                    
+
                     // Load recording history
                     loadRecordingHistory();
                 })
@@ -390,7 +416,7 @@
             currentPromptListId = promptListId;
             currentPromptIndex = 0;
             recordedPrompts.clear();
-            
+
             // Load all prompts for this list
             fetch(`/api/load_prompts/${currentProfileId}/${promptListId}`)
                 .then(response => response.json())
@@ -398,7 +424,7 @@
                     allPrompts = data.prompts;
                     loadCurrentPrompt();
                     loadRecordedStatus();
-                    
+
                     // Refresh stats when prompt list changes
                     loadRecordingStats();
                 })
@@ -417,7 +443,7 @@
             const prompt = allPrompts[currentPromptIndex];
             currentPromptId = currentPromptIndex + 1;
             currentPromptText = prompt;
-            
+
             document.getElementById('currentPrompt').innerHTML = `
                 <h6>Prompt #${currentPromptId} of ${allPrompts.length}</h6>
                 <p class="mb-0 fs-5">${currentPromptText}</p>
@@ -427,18 +453,18 @@
                     </span>
                 </div>
             `;
-            
+
             document.getElementById('recordButton').disabled = false;
             document.getElementById('prevButton').disabled = currentPromptIndex === 0;
             document.getElementById('nextButton').disabled = currentPromptIndex === allPrompts.length - 1;
-            
+
             // Check if this prompt has a recording and show playback if it does
             if (recordedPrompts.has(currentPromptIndex)) {
                 loadExistingRecording(currentPromptIndex);
             } else {
                 document.getElementById('audioPlayback').classList.add('d-none');
             }
-            
+
             updateProgress();
         }
 
@@ -486,12 +512,34 @@
         async function startRecording() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
+
+                // Safari-compatible MediaRecorder options
+                let mimeType = 'audio/webm';
+                const supportedTypes = [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/mp4',
+                    'audio/mp4;codecs=mp4a.40.2',
+                    'audio/wav',
+                    'audio/ogg;codecs=opus'
+                ];
+
+                for (const type of supportedTypes) {
+                    if (MediaRecorder.isTypeSupported(type)) {
+                        mimeType = type;
+                        break;
+                    }
+                }
+
+                console.log('Browser:', navigator.userAgent);
+                console.log('Using MediaRecorder mime type:', mimeType);
+                console.log('Safari detected:', isSafari());
+                mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
                 audioChunks = [];
-                
+
                 // Set isRecording BEFORE setupAudioVisualization
                 isRecording = true;
-                
+
                 // Reset clipping counter
                 clippingCount = 0;
 
@@ -506,24 +554,25 @@
                 };
 
                 mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    // Use the same mime type that was used for recording
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
                     document.getElementById('audioPlayback').classList.remove('d-none');
                     document.getElementById('recordingStatus').classList.add('d-none');
-                    
+
                     // Show clipping warning if any clipping occurred
                     if (clippingCount > 0) {
                         showClippingWarning();
                     }
-                    
+
                     // Stop audio visualization
                     stopAudioVisualization();
-                    
+
                     // Draw the waveform for the recorded audio
                     drawPlaybackWaveform(audioBlob);
                 };
 
                 mediaRecorder.start();
-                
+
                 document.getElementById('recordButton').innerHTML = '<i class="fas fa-stop me-2"></i>Stop Recording';
                 document.getElementById('recordButton').classList.remove('btn-success');
                 document.getElementById('recordButton').classList.add('btn-danger');
@@ -540,7 +589,7 @@
                 mediaRecorder.stop();
                 mediaRecorder.stream.getTracks().forEach(track => track.stop());
                 isRecording = false;
-                
+
                 document.getElementById('recordButton').innerHTML = '<i class="fas fa-microphone me-2"></i>Start Recording';
                 document.getElementById('recordButton').classList.remove('btn-danger');
                 document.getElementById('recordButton').classList.add('btn-success');
@@ -568,14 +617,14 @@
                     recordedPrompts.add(currentPromptIndex);
                     addToRecordingHistory(currentPromptText, data.duration);
                     document.getElementById('audioPlayback').classList.add('d-none');
-                    
+
                     // Update the current prompt display
                     loadCurrentPrompt();
-                    
+
                     // Refresh recording stats and history
                     loadRecordingStats();
                     loadRecordingHistory();
-                    
+
                     if (document.getElementById('autoAdvance').checked) {
                         nextPrompt();
                     }
@@ -609,7 +658,7 @@
                 </div>
                 <p class="mb-1">${promptText}</p>
             `;
-            
+
             if (history.querySelector('.text-center')) {
                 history.innerHTML = '';
             }
@@ -629,36 +678,35 @@
                 if (audioContext) {
                     audioContext.close();
                 }
-                
-                // Create new audio context
+
+                // Create new audio context with Safari compatibility
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Resume audio context if suspended (required by some browsers)
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume();
-                }
-                
+
+                // Safari requires user interaction to resume audio context
+                // We'll handle this in the playback function instead
+                console.log('Audio context state:', audioContext.state);
+
                 analyser = audioContext.createAnalyser();
                 microphone = audioContext.createMediaStreamSource(stream);
-                
+
                 // Configure analyser for time domain data (waveform)
                 analyser.fftSize = 2048;
                 analyser.smoothingTimeConstant = 0.8;
-                
+
                 const bufferLength = analyser.frequencyBinCount;
                 dataArray = new Uint8Array(bufferLength);
-                
+
                 // Connect microphone to analyser
                 microphone.connect(analyser);
-                
+
                 // Ensure containers are visible
                 document.getElementById('inputLevelContainer').classList.remove('d-none');
                 document.getElementById('waveformContainer').classList.remove('d-none');
-                
+
                 console.log('Audio visualization setup complete');
                 console.log('Analyser connected:', analyser !== null);
                 console.log('Data array length:', dataArray.length);
-                
+
                 // Test if we can get data
                 setTimeout(() => {
                     if (analyser) {
@@ -667,7 +715,7 @@
                         console.log('Test audio data value:', testValue, '(should be around 128 when silent)');
                     }
                 }, 100);
-                
+
                 // Start visualization loop
                 drawVisualization();
             } catch (error) {
@@ -677,10 +725,10 @@
 
         function drawVisualization() {
             if (!analyser || !isRecording) return;
-            
+
             // Get time domain data for waveform
             analyser.getByteTimeDomainData(dataArray);
-            
+
             // Calculate input level from time domain data
             let sum = 0;
             let max = 0;
@@ -692,26 +740,26 @@
             const average = sum / dataArray.length;
             // Increase sensitivity: multiply by 3 for better visual feedback
             const percentage = Math.min((average / 128) * 300, 100);
-            
+
             // Debug logging (only log occasionally to avoid spam)
             if (Math.random() < 0.01) { // Log 1% of the time
                 console.log('Audio data - Average:', average, 'Max:', max, 'Percentage:', percentage.toFixed(1) + '%');
             }
-            
+
             // Update input level indicator
             const levelBar = document.getElementById('inputLevel');
             if (levelBar) {
                 levelBar.style.width = percentage + '%';
-                
+
                 // Check for clipping (values near maximum)
                 const clippingThreshold = 120; // Adjusted for time domain data (0-128 range, 120 = 94% of max)
                 const wasClipping = isClipping;
                 isClipping = max > clippingThreshold;
-                
+
                 if (isClipping && !wasClipping) {
                     clippingCount++;
                 }
-                
+
                 // Color coding for input level and clipping indicator
                 if (isClipping) {
                     levelBar.className = 'progress-bar bg-danger';
@@ -733,10 +781,10 @@
                     }
                 }
             }
-            
+
             // Draw waveform
             drawWaveform();
-            
+
             // Continue animation loop
             if (isRecording) {
                 animationId = requestAnimationFrame(drawVisualization);
@@ -746,20 +794,20 @@
         function drawWaveform() {
             const canvas = document.getElementById('waveformCanvas');
             if (!canvas) return;
-            
+
             const ctx = canvas.getContext('2d');
-            
+
             // Set canvas size to match display size
             const rect = canvas.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
             const width = canvas.width;
             const height = canvas.height;
-            
+
             // Clear canvas
             ctx.fillStyle = '#f8f9fa';
             ctx.fillRect(0, 0, width, height);
-            
+
             // Draw center line
             ctx.strokeStyle = '#dee2e6';
             ctx.lineWidth = 1;
@@ -767,20 +815,20 @@
             ctx.moveTo(0, height / 2);
             ctx.lineTo(width, height / 2);
             ctx.stroke();
-            
+
             // Draw waveform bars from time domain data
             const barWidth = Math.max(1, width / dataArray.length);
             const centerY = height / 2;
-            
+
             for (let i = 0; i < dataArray.length; i++) {
                 // Convert time domain data (0-255) to amplitude (-1 to 1)
                 const value = (dataArray[i] - 128) / 128;
                 const barHeight = Math.abs(value) * height * 0.4; // Half height for better visibility
                 const x = i * barWidth;
-                
+
                 // Color based on clipping
                 ctx.fillStyle = isClipping ? '#dc3545' : '#007bff';
-                
+
                 // Draw bar from center line
                 ctx.fillRect(x, centerY - barHeight / 2, barWidth, barHeight);
             }
@@ -791,12 +839,12 @@
                 cancelAnimationFrame(animationId);
                 animationId = null;
             }
-            
+
             if (audioContext) {
                 audioContext.close();
                 audioContext = null;
             }
-            
+
             // Hide visualization elements
             document.getElementById('inputLevelContainer').classList.add('d-none');
             document.getElementById('waveformContainer').classList.add('d-none');
@@ -808,10 +856,10 @@
                 alert('Please stop the current recording before finishing.');
                 return;
             }
-            
+
             const recordedCount = recordedPrompts.size;
             const totalCount = allPrompts.length;
-            
+
             if (recordedCount === 0) {
                 if (confirm('You haven\'t recorded any prompts yet. Are you sure you want to finish?')) {
                     returnToMainPage();
@@ -830,10 +878,10 @@
                 mediaRecorder.stop();
                 mediaRecorder.stream.getTracks().forEach(track => track.stop());
             }
-            
+
             // Stop audio visualization
             stopAudioVisualization();
-            
+
             // Return to main page
             window.location.href = '/';
         }
@@ -855,7 +903,7 @@
                 alert('Please select a profile first.');
                 return;
             }
-            
+
             fetch(`/api/open_recordings_folder/${currentProfileId}`)
                 .then(response => response.json())
                 .then(data => {
@@ -871,13 +919,13 @@
 
         function loadRecordingHistory() {
             if (!currentProfileId) return;
-            
+
             fetch(`/api/recording_history/${currentProfileId}?limit=10`)
                 .then(response => response.json())
                 .then(recordings => {
                     const container = document.getElementById('recordingHistory');
                     container.innerHTML = '';
-                    
+
                     if (recordings.length === 0) {
                         container.innerHTML = `
                             <div class="text-center text-muted">
@@ -886,7 +934,7 @@
                         `;
                         return;
                     }
-                    
+
                     recordings.forEach(rec => {
                         const item = document.createElement('div');
                         item.className = 'list-group-item';
@@ -921,25 +969,25 @@
         function drawPlaybackWaveform(audioBlob) {
             const canvas = document.getElementById('playbackWaveform');
             const ctx = canvas.getContext('2d');
-            
+
             // Set canvas size
             canvas.width = canvas.offsetWidth;
             const width = canvas.width;
             const height = canvas.height;
-            
+
             // Clear canvas
             ctx.fillStyle = '#f8f9fa';
             ctx.fillRect(0, 0, width, height);
-            
-            // Create audio context for analysis
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Create audio context for analysis with Safari compatibility
+            const analysisAudioContext = new (window.AudioContext || window.webkitAudioContext)();
             const fileReader = new FileReader();
-            
+
             fileReader.onload = function(e) {
-                audioContext.decodeAudioData(e.target.result).then(audioBuffer => {
+                analysisAudioContext.decodeAudioData(e.target.result).then(audioBuffer => {
                     const channelData = audioBuffer.getChannelData(0);
                     const samplesPerPixel = Math.floor(channelData.length / width);
-                    
+
                     // Generate waveform data
                     playbackWaveformData = [];
                     for (let x = 0; x < width; x++) {
@@ -947,13 +995,13 @@
                         const end = Math.min(start + samplesPerPixel, channelData.length);
                         let sum = 0;
                         let max = 0;
-                        
+
                         for (let i = start; i < end; i++) {
                             const abs = Math.abs(channelData[i]);
                             sum += abs;
                             max = Math.max(max, abs);
                         }
-                        
+
                         const average = sum / (end - start);
                         playbackWaveformData.push({
                             average: average,
@@ -961,24 +1009,44 @@
                             x: x
                         });
                     }
-                    
+
                     // Draw the waveform
                     drawWaveformBars(ctx, width, height, playbackWaveformData, 0);
-                    
-                    // Set up audio element
+
+                    // Set up audio element with Safari compatibility
                     playbackAudio = document.getElementById('playbackAudio');
+
+                    // Create blob URL with proper cleanup
+                    if (playbackAudio.src) {
+                        URL.revokeObjectURL(playbackAudio.src);
+                    }
                     playbackAudio.src = URL.createObjectURL(audioBlob);
+
+                    // Add event listeners
                     playbackAudio.addEventListener('timeupdate', updatePlaybackProgress);
                     playbackAudio.addEventListener('ended', stopPlayback);
-                    
+                    playbackAudio.addEventListener('error', function(e) {
+                        console.error('Audio element error:', e);
+                        showPlaybackError();
+                    });
+
+                    // Safari-specific: preload the audio and set up proper attributes
+                    playbackAudio.load();
+
+                    // Safari-specific attributes for better compatibility
+                    if (isSafari()) {
+                        playbackAudio.setAttribute('playsinline', 'true');
+                        playbackAudio.setAttribute('webkit-playsinline', 'true');
+                    }
+
                     // Add click handler for seeking
                     canvas.addEventListener('click', seekToPosition);
-                    
+
                 }).catch(error => {
                     console.error('Error decoding audio for waveform:', error);
                 });
             };
-            
+
             fileReader.readAsArrayBuffer(audioBlob);
         }
 
@@ -986,7 +1054,7 @@
             // Clear canvas
             ctx.fillStyle = '#f8f9fa';
             ctx.fillRect(0, 0, width, height);
-            
+
             // Draw center line
             ctx.strokeStyle = '#dee2e6';
             ctx.lineWidth = 1;
@@ -994,22 +1062,22 @@
             ctx.moveTo(0, height / 2);
             ctx.lineTo(width, height / 2);
             ctx.stroke();
-            
+
             // Draw waveform bars
             const barWidth = Math.max(1, width / data.length);
-            
+
             data.forEach((point, index) => {
                 const x = point.x;
                 const barHeight = point.average * height * 0.8;
                 const centerY = height / 2;
-                
+
                 // Color based on progress
                 if (x <= progress * width) {
                     ctx.fillStyle = '#007bff'; // Blue for played portion
                 } else {
                     ctx.fillStyle = '#6c757d'; // Gray for unplayed portion
                 }
-                
+
                 // Draw bar
                 ctx.fillRect(x, centerY - barHeight / 2, barWidth, barHeight);
             });
@@ -1017,7 +1085,7 @@
 
         function togglePlayback() {
             if (!playbackAudio) return;
-            
+
             if (isPlaying) {
                 playbackAudio.pause();
                 isPlaying = false;
@@ -1026,46 +1094,87 @@
                     cancelAnimationFrame(playbackAnimationId);
                 }
             } else {
-                playbackAudio.play();
-                isPlaying = true;
-                document.getElementById('playbackIcon').className = 'fas fa-pause';
-                animatePlayback();
+                // Safari requires user interaction and audio context resume
+                playAudioWithSafariSupport();
             }
+        }
+
+        async function playAudioWithSafariSupport() {
+            try {
+                // Resume audio context if suspended (required by Safari)
+                if (audioContext && audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                // Safari requires explicit play() call with error handling
+                const playPromise = playbackAudio.play();
+
+                if (playPromise !== undefined) {
+                    await playPromise;
+                    isPlaying = true;
+                    document.getElementById('playbackIcon').className = 'fas fa-pause';
+                    animatePlayback();
+                }
+            } catch (error) {
+                console.error('Audio playback failed:', error);
+                // Show user-friendly error message
+                showPlaybackError();
+            }
+        }
+
+        function showPlaybackError() {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-warning alert-dismissible fade show mt-2';
+            let errorMessage = 'Audio playback failed. ';
+
+            if (isSafari()) {
+                errorMessage += 'Safari detected. This may be due to autoplay restrictions or audio format compatibility. ';
+                errorMessage += 'Please try clicking the play button again, or check Safari\'s audio settings in Safari > Settings > Websites > Auto-Play.';
+            } else {
+                errorMessage += 'Please try clicking the play button again or check your browser\'s audio settings.';
+            }
+
+            errorDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${errorMessage}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.getElementById('audioPlayback').appendChild(errorDiv);
         }
 
         function stopPlayback() {
             if (!playbackAudio) return;
-            
+
             playbackAudio.pause();
             playbackAudio.currentTime = 0;
             isPlaying = false;
             document.getElementById('playbackIcon').className = 'fas fa-play';
-            
+
             if (playbackAnimationId) {
                 cancelAnimationFrame(playbackAnimationId);
             }
-            
+
             // Reset waveform display
             const canvas = document.getElementById('playbackWaveform');
             const ctx = canvas.getContext('2d');
             const width = canvas.width;
             const height = canvas.height;
             drawWaveformBars(ctx, width, height, playbackWaveformData, 0);
-            
+
             updatePlaybackTime();
         }
 
         function animatePlayback() {
             if (!isPlaying || !playbackAudio) return;
-            
+
             const canvas = document.getElementById('playbackWaveform');
             const ctx = canvas.getContext('2d');
             const width = canvas.width;
             const height = canvas.height;
-            
+
             const progress = playbackAudio.currentTime / playbackAudio.duration;
             drawWaveformBars(ctx, width, height, playbackWaveformData, progress);
-            
+
             playbackAnimationId = requestAnimationFrame(animatePlayback);
         }
 
@@ -1075,7 +1184,7 @@
 
         function updatePlaybackTime() {
             if (!playbackAudio) return;
-            
+
             const current = formatTime(playbackAudio.currentTime);
             const duration = formatTime(playbackAudio.duration || 0);
             document.getElementById('playbackTime').textContent = `${current} / ${duration}`;
@@ -1089,12 +1198,12 @@
 
         function seekToPosition(event) {
             if (!playbackAudio || !playbackWaveformData.length) return;
-            
+
             const canvas = document.getElementById('playbackWaveform');
             const rect = canvas.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const progress = x / canvas.width;
-            
+
             playbackAudio.currentTime = progress * playbackAudio.duration;
         }
 

@@ -92,7 +92,7 @@ class VoiceProfile(BaseModel):
     description: Optional[str] = None
     language: Optional[str] = None
     speaker_name: Optional[str] = None  # Changed from gender to match frontend
-    
+
 class PromptList(BaseModel):
     name: str
     sentences: List[str]
@@ -101,7 +101,7 @@ class RecordingMetadata(BaseModel):
     filename: str
     sentence: str
     prompt_list: str
-    
+
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -110,7 +110,7 @@ async def read_root(request: Request):
     for profile_dir in VOICES_DIR.iterdir():
         if profile_dir.is_dir():
             profiles.append(profile_dir.name)
-    
+
     return templates.TemplateResponse("index.html", {
         "request": request,
         "profiles": profiles
@@ -126,7 +126,7 @@ async def get_profiles():
             profile_file = profile_dir / "profile.json"
             progress_file = profile_dir / "progress.json"
             clips_dir = profile_dir / "clips"
-            
+
             # Default profile info
             profile_info = {
                 "id": profile_dir.name,
@@ -136,7 +136,7 @@ async def get_profiles():
                 "description": "",
                 "recording_count": 0
             }
-            
+
             # Load profile metadata if available
             if profile_file.exists():
                 try:
@@ -149,29 +149,29 @@ async def get_profiles():
                         })
                 except:
                     pass
-            
+
             # Count recordings
             if clips_dir.exists():
                 profile_info["recording_count"] = len(list(clips_dir.glob("*.wav")))
-            
+
             profiles.append(profile_info)
-    
+
     return profiles
 
 @app.post("/api/profiles")
 async def create_profile(profile: VoiceProfile):
     """Create a new voice profile"""
     profile_dir = VOICES_DIR / profile.name
-    
+
     if profile_dir.exists():
         return {"success": False, "error": "Profile already exists"}
-    
+
     try:
         # Create directory structure
         profile_dir.mkdir()
         (profile_dir / "clips").mkdir()
         (profile_dir / "prompts").mkdir()
-        
+
         # Create profile metadata
         profile_metadata = {
             "name": profile.name,
@@ -180,19 +180,19 @@ async def create_profile(profile: VoiceProfile):
             "description": profile.description or "",
             "created_at": "2024-01-01"  # Simplified for now
         }
-        
+
         # Save profile metadata
         with open(profile_dir / "profile.json", "w") as f:
             json.dump(profile_metadata, f)
-        
+
         # Create initial progress file
         with open(profile_dir / "progress.json", "w") as f:
             json.dump({}, f)
-        
+
         # Create metadata file for recordings
         with open(profile_dir / "metadata.jsonl", "w") as f:
             f.write("")
-        
+
         # Always seed all four supported languages for every profile
         for lang_code in ["en-US", "en-GB", "sv-SE", "it-IT"]:
             seed_offline_prompts(profile_dir, lang_code)
@@ -209,17 +209,17 @@ async def create_profile(profile: VoiceProfile):
 async def profile_page(request: Request, profile_name: str):
     """Render the profile page"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     # Get prompt lists
     prompt_lists = []
     prompts_dir = profile_dir / "prompts"
     if prompts_dir.exists():
         for prompt_file in prompts_dir.glob("*.txt"):
             prompt_lists.append(prompt_file.stem)
-    
+
     return templates.TemplateResponse("profiles.html", {
         "request": request,
         "profile_name": profile_name,
@@ -230,19 +230,19 @@ async def profile_page(request: Request, profile_name: str):
 async def record_page(request: Request, profile_name: str, prompt_list: str):
     """Render the recording page"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     prompt_file = profile_dir / "prompts" / f"{prompt_list}.txt"
-    
+
     if not prompt_file.exists():
         raise HTTPException(status_code=404, detail="Prompt list not found")
-    
+
     # Get sentences
     with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
         sentences = [line.strip() for line in f if line.strip()]
-    
+
     # Get progress
     progress_file = profile_dir / "progress.json"
     if progress_file.exists():
@@ -259,7 +259,7 @@ async def record_page(request: Request, profile_name: str, prompt_list: str):
             "recorded": 0,
             "last_index": 0
         }
-    
+
     return templates.TemplateResponse("record.html", {
         "request": request,
         "profile_name": profile_name,
@@ -279,26 +279,26 @@ async def save_recording(
 ):
     """Save a recorded audio clip"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     clips_dir = profile_dir / "clips"
     if not clips_dir.exists():
         clips_dir.mkdir()
-    
+
     # Generate filename based on prompt list and index
     filename = f"{prompt_list}_{sentence_index:04d}.wav"
     file_path = clips_dir / filename
-    
+
     # Save the audio file
     with open(file_path, "wb") as f:
         content = await audio_file.read()
         f.write(content)
-    
+
     # Process audio if needed (normalize, trim silence)
     # This would use the process_audio function from utils.audio
-    
+
     # Update metadata
     metadata_file = profile_dir / "metadata.jsonl"
     with open(metadata_file, "a") as f:
@@ -308,7 +308,7 @@ async def save_recording(
             "prompt_list": prompt_list
         }
         f.write(json.dumps(metadata) + "\n")
-    
+
     # Update progress
     progress_file = profile_dir / "progress.json"
     if progress_file.exists():
@@ -316,7 +316,7 @@ async def save_recording(
             progress = json.load(f)
     else:
         progress = {}
-    
+
     if prompt_list not in progress:
         # Get total sentences in prompt list
         prompt_file = profile_dir / "prompts" / f"{prompt_list}.txt"
@@ -326,19 +326,19 @@ async def save_recording(
                 total = len(sentences)
         else:
             total = 0
-            
+
         progress[prompt_list] = {
             "total": total,
             "recorded": 0,
             "last_index": 0
         }
-    
+
     progress[prompt_list]["recorded"] += 1
     progress[prompt_list]["last_index"] = sentence_index + 1
-    
+
     with open(progress_file, "w") as f:
         json.dump(progress, f)
-    
+
     return {"message": "Recording saved successfully", "filename": filename}
 
 # Missing API routes that frontend is calling
@@ -348,7 +348,7 @@ async def get_statistics():
     total_recordings = 0
     total_profiles = 0
     total_duration = 0
-    
+
     for profile_dir in VOICES_DIR.iterdir():
         if profile_dir.is_dir() and profile_dir.name != "example":
             total_profiles += 1
@@ -356,12 +356,12 @@ async def get_statistics():
             if clips_dir.exists():
                 recordings = list(clips_dir.glob("*.wav"))
                 total_recordings += len(recordings)
-                
+
                 # Calculate total duration (simplified)
                 for recording in recordings:
                     # For now, estimate 3 seconds per recording
                     total_duration += 3
-    
+
     return {
         "total_recordings": total_recordings,
         "total_profiles": total_profiles,
@@ -374,7 +374,7 @@ async def get_statistics():
 async def get_recent_activity():
     """Get recent recording activity"""
     recent_recordings = []
-    
+
     # Get all profiles
     for profile_dir in VOICES_DIR.iterdir():
         if profile_dir.is_dir():
@@ -396,7 +396,7 @@ async def get_recent_activity():
                                     continue
                 except Exception:
                     pass
-    
+
     # Sort by timestamp and return most recent 10
     recent_recordings.sort(key=lambda x: x["timestamp"], reverse=True)
     return recent_recordings[:10]
@@ -413,7 +413,7 @@ async def get_prompt_list(prompt_list: str):
     """Get prompt list details"""
     # Find the prompt list in any profile
     prompts = []
-    
+
     for profile_dir in VOICES_DIR.iterdir():
         if profile_dir.is_dir():
             prompts_dir = profile_dir / "prompts"
@@ -426,7 +426,7 @@ async def get_prompt_list(prompt_list: str):
                         return {"prompts": prompts, "profile": profile_dir.name, "name": prompt_list}
                     except Exception:
                         pass
-    
+
     raise HTTPException(status_code=404, detail="Prompt list not found")
 
 # Create recording endpoint
@@ -442,19 +442,19 @@ async def create_recording(
     profile_dir = VOICES_DIR / voice_profile_id
     clips_dir = profile_dir / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Generate filename
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{prompt_list_id}_{prompt_index}_{timestamp}.wav"
     file_path = clips_dir / filename
-    
+
     # Save audio file
     try:
         content = await audio.read()
         with open(file_path, "wb") as f:
             f.write(content)
-        
+
         # Update metadata
         metadata_file = profile_dir / "metadata.jsonl"
         metadata = {
@@ -464,7 +464,7 @@ async def create_recording(
         }
         with open(metadata_file, "a") as f:
             f.write(json.dumps(metadata) + "\n")
-        
+
         return {
             "message": "Recording saved successfully",
             "filename": filename,
@@ -477,12 +477,12 @@ async def create_recording(
 async def get_recordings(limit: int = 10):
     """Get recent recordings"""
     recordings = []
-    
+
     for profile_dir in VOICES_DIR.iterdir():
         if profile_dir.is_dir() and profile_dir.name != "example":
             clips_dir = profile_dir / "clips"
             metadata_file = profile_dir / "metadata.jsonl"
-            
+
             if clips_dir.exists() and metadata_file.exists():
                 # Read metadata
                 if metadata_file.exists():
@@ -501,7 +501,7 @@ async def get_recordings(limit: int = 10):
                                     })
                                 except json.JSONDecodeError:
                                     continue
-    
+
     # Sort by created_at (newest first) and limit
     recordings = recordings[-limit:] if limit > 0 else recordings
     return recordings
@@ -510,10 +510,10 @@ async def get_recordings(limit: int = 10):
 async def get_profile(profile_name: str):
     """Get specific profile details"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     # Get profile metadata
     metadata_file = profile_dir / "metadata.jsonl"
     profile_info = {
@@ -524,30 +524,30 @@ async def get_profile(profile_name: str):
         "clips_count": 0,
         "prompt_lists": []
     }
-    
+
     # Get clips count
     clips_dir = profile_dir / "clips"
     if clips_dir.exists():
         profile_info["clips_count"] = len(list(clips_dir.glob("*.wav")))
-    
+
     # Get prompt lists
     prompts_dir = profile_dir / "prompts"
     if prompts_dir.exists():
         profile_info["prompt_lists"] = [p.stem for p in prompts_dir.glob("*.txt")]
-    
+
     return profile_info
 
 @app.delete("/api/profiles/{profile_name}")
 async def delete_profile(profile_name: str):
     """Delete a voice profile"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         return {"success": False, "error": "Profile not found"}
-    
+
     # Delete the entire profile directory
     shutil.rmtree(profile_dir)
-    
+
     return {"success": True, "message": f"Profile {profile_name} deleted successfully"}
 
 @app.post("/api/profiles/{profile_name}/prompts")
@@ -558,55 +558,55 @@ async def upload_prompt_list(
 ):
     """Upload a prompt list file"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     prompts_dir = profile_dir / "prompts"
     prompts_dir.mkdir(exist_ok=True)
-    
+
     # Save the prompt file
     file_path = prompts_dir / f"{prompt_list_name}.txt"
-    
+
     content = await prompt_file.read()
     with open(file_path, "wb") as f:
         f.write(content)
-    
+
     return {"message": f"Prompt list {prompt_list_name} uploaded successfully"}
 
 @app.get("/api/profiles/{profile_name}/prompts/{prompt_list}")
 async def get_prompt_list(profile_name: str, prompt_list: str):
     """Get sentences from a prompt list"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     prompt_file = profile_dir / "prompts" / f"{prompt_list}.txt"
-    
+
     if not prompt_file.exists():
         raise HTTPException(status_code=404, detail="Prompt list not found")
-    
+
     with open(prompt_file, "r") as f:
         sentences = [line.strip() for line in f if line.strip()]
-    
+
     return {"sentences": sentences, "total": len(sentences)}
 
 @app.delete("/api/profiles/{profile_name}/prompts/{prompt_list}")
 async def delete_prompt_list(profile_name: str, prompt_list: str):
     """Delete a prompt list"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     prompt_file = profile_dir / "prompts" / f"{prompt_list}.txt"
-    
+
     if not prompt_file.exists():
         raise HTTPException(status_code=404, detail="Prompt list not found")
-    
+
     prompt_file.unlink()
-    
+
     return {"message": f"Prompt list {prompt_list} deleted successfully"}
 
 # Prompt list download functionality
@@ -620,24 +620,24 @@ async def download_prompt_list(
 ):
     """Download a prompt list from piper_recording_studio wordlists or online LM dataset"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     prompts_dir = profile_dir / "prompts"
     prompts_dir.mkdir(exist_ok=True)
-    
+
     # Generate default prompt list name if not provided
     if not prompt_list_name:
         prompt_list_name = f"{source}_{language}_{category}"
-    
+
     file_path = prompts_dir / f"{prompt_list_name}.txt"
-    
+
     if file_path.exists():
         return {"message": f"Prompt list {prompt_list_name} already exists", "downloaded": False}
-    
+
     prompts = []
-    
+
     if source == "piper":
         # Load from local repo prompts directory
         prompts = await download_piper_prompt_list(language, category)
@@ -646,17 +646,17 @@ async def download_prompt_list(
         prompts = await download_online_lm_dataset(language, category)
     else:
         raise HTTPException(status_code=400, detail="Invalid source. Use 'piper' or 'online'")
-    
+
     if not prompts:
         raise HTTPException(status_code=404, detail=f"No prompts found for {language} - {category}")
-    
+
     # Save the downloaded prompts
     with open(file_path, "w", encoding="utf-8") as f:
         for prompt in prompts:
             f.write(prompt + "\n")
-    
+
     return {
-        "message": f"Prompt list {prompt_list_name} downloaded successfully", 
+        "message": f"Prompt list {prompt_list_name} downloaded successfully",
         "downloaded": True,
         "prompts_count": len(prompts),
         "source": source,
@@ -676,7 +676,7 @@ async def download_piper_prompt_list(language: str, category: str) -> list:
         "Numbers": ["numbers"],
         "CommonPhrases": ["common_phrases"]
     }
-    
+
     # Map language codes to directory names
     language_mappings = {
         "sv-SE": "Swedish (Sweden)_sv-SE",
@@ -692,9 +692,9 @@ async def download_piper_prompt_list(language: str, category: str) -> list:
         "zh-CN": "Chinese (Simplified)_zh-CN",
         "zh-TW": "Chinese (Traditional)_zh-TW"
     }
-    
+
     base_prompts_dir = PROMPTS_DIR
-    
+
     # Get the directory name for the language
     dir_name = language_mappings.get(language)
     if not dir_name:
@@ -705,15 +705,15 @@ async def download_piper_prompt_list(language: str, category: str) -> list:
                 break
         else:
             return []
-    
+
     language_dir = base_prompts_dir / dir_name
-    
+
     if not language_dir.exists():
         return []
-    
+
     prompts = []
     patterns = category_patterns.get(category, [category])
-    
+
     # Look for files matching the category patterns
     for pattern in patterns:
         for txt_file in language_dir.glob(f"*{pattern}*.txt"):
@@ -724,7 +724,7 @@ async def download_piper_prompt_list(language: str, category: str) -> list:
             except Exception as e:
                 print(f"Error reading {txt_file}: {e}")
                 continue
-    
+
     return prompts  # Return full list
 
 async def download_online_lm_dataset(language: str, category: str) -> list:
@@ -734,7 +734,7 @@ async def download_online_lm_dataset(language: str, category: str) -> list:
     # - Common Voice dataset
     # - OpenSLR datasets
     # - Custom LM datasets
-    
+
     # For now, we'll use a simple fallback that generates sample prompts
     sample_prompts = {
         "en-US": {
@@ -776,7 +776,7 @@ async def download_online_lm_dataset(language: str, category: str) -> list:
             ]
         }
     }
-    
+
     # Return prompts for the requested language and category, or fallback to English General
     return sample_prompts.get(language, sample_prompts).get(category, sample_prompts["en-US"]["General"])
 
@@ -785,14 +785,14 @@ async def download_online_lm_dataset(language: str, category: str) -> list:
 async def get_profile_prompts(profile_name: str):
     """Get all prompt lists for a specific profile"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     prompts_dir = profile_dir / "prompts"
     if not prompts_dir.exists():
         return []
-    
+
     prompts = []
     for prompt_file in prompts_dir.glob("*.txt"):
         try:
@@ -818,7 +818,7 @@ async def get_profile_prompts(profile_name: str):
         except Exception as e:
             print(f"Error reading prompt file {prompt_file}: {e}")
             continue
-    
+
     return prompts
 
 # Helper endpoint to open prompt file folder in OS explorer
@@ -848,23 +848,23 @@ async def open_prompt_folder(profile_name: str, prompt_name: str):
 async def get_next_prompt(profile_name: str, prompt_list_id: str):
     """Get the next prompt for recording"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     # Parse prompt list name from ID (format: profile_name_prompt_name)
     # Remove the profile_name prefix and first underscore
     if not prompt_list_id.startswith(f"{profile_name}_"):
         raise HTTPException(status_code=400, detail="Invalid prompt list ID format")
-    
+
     prompt_name = prompt_list_id[len(profile_name) + 1:]
     prompt_file = profile_dir / "prompts" / f"{prompt_name}.txt"
-    
 
-    
+
+
     if not prompt_file.exists():
         raise HTTPException(status_code=404, detail="Prompt list not found")
-    
+
     try:
         with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
             prompts = []
@@ -878,10 +878,10 @@ async def get_next_prompt(profile_name: str, prompt_list_id: str):
                             prompts.append(text_part)
                     else:
                         prompts.append(line)
-        
+
         if not prompts:
             raise HTTPException(status_code=404, detail="No prompts available")
-        
+
         # For now, return the first prompt
         # In a real implementation, you'd track which prompts have been recorded
         return {
@@ -905,20 +905,20 @@ async def get_next_prompt(profile_name: str, prompt_list_id: str):
 async def load_prompts(profile_name: str, prompt_list_id: str):
     """Load all prompts for a specific prompt list"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     # Parse prompt list name from ID - handle both formats
     if prompt_list_id.startswith(f"{profile_name}_"):
         prompt_name = prompt_list_id[len(profile_name) + 1:]
     else:
         prompt_name = prompt_list_id
     prompt_file = profile_dir / "prompts" / f"{prompt_name}.txt"
-    
+
     if not prompt_file.exists():
         raise HTTPException(status_code=404, detail="Prompt list not found")
-    
+
     try:
         with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
             prompts = []
@@ -932,7 +932,7 @@ async def load_prompts(profile_name: str, prompt_list_id: str):
                             prompts.append(text_part)
                     else:
                         prompts.append(line)
-        
+
         return {"prompts": prompts}
     except Exception as e:
         print(f"Error reading prompt file {prompt_file}: {e}")
@@ -944,20 +944,20 @@ async def get_recorded_status(profile_name: str, prompt_list_id: str):
     """Get which prompts have been recorded for a specific prompt list - only if files actually exist"""
     profile_dir = VOICES_DIR / profile_name
     recordings_dir = profile_dir / "recordings"
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     # Parse prompt list name from ID - handle both formats
     if prompt_list_id.startswith(f"{profile_name}_"):
         prompt_name = prompt_list_id[len(profile_name) + 1:]
     else:
         prompt_name = prompt_list_id
-    
+
     # Check metadata file for recorded prompts
     metadata_file = profile_dir / "metadata.jsonl"
     recorded_indices = []
-    
+
     if metadata_file.exists() and recordings_dir.exists():
         try:
             with open(metadata_file, "r", encoding="utf-8") as f:
@@ -969,7 +969,7 @@ async def get_recorded_status(profile_name: str, prompt_list_id: str):
                                 # Use prompt_index from metadata directly
                                 prompt_idx = metadata.get("prompt_index")
                                 filename = metadata.get("filename")
-                                
+
                                 # CRITICAL: Only count as recorded if the actual file exists
                                 if prompt_idx is not None and filename:
                                     file_path = recordings_dir / filename
@@ -979,7 +979,7 @@ async def get_recorded_status(profile_name: str, prompt_list_id: str):
                             continue
         except Exception as e:
             print(f"Error reading metadata file: {e}")
-    
+
     return {"recorded_indices": recorded_indices}
 
 # Get recording statistics for a profile
@@ -987,21 +987,21 @@ async def get_recorded_status(profile_name: str, prompt_list_id: str):
 async def get_recording_stats(profile_name: str, selected_language: str = None):
     """Get recording statistics for prompt lists in a profile"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     stats = []
     metadata_file = profile_dir / "metadata.jsonl"
     recordings_dir = profile_dir / "recordings"
-    
+
     # Get all prompt files in the profile
     prompts_dir = profile_dir / "prompts"
     if prompts_dir.exists():
         for prompt_file in prompts_dir.glob("*.txt"):
             prompt_name = prompt_file.stem
             language_code = prompt_name.split('_')[0] if '_' in prompt_name else prompt_name
-            
+
             # Count total prompts in file
             try:
                 with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
@@ -1018,7 +1018,7 @@ async def get_recording_stats(profile_name: str, selected_language: str = None):
             except Exception as e:
                 print(f"Error reading prompt file {prompt_file}: {e}")
                 total_prompts = 0
-            
+
             # Count recorded prompts by scanning actual files
             recorded_count = 0
             if recordings_dir.exists() and metadata_file.exists():
@@ -1037,7 +1037,7 @@ async def get_recording_stats(profile_name: str, selected_language: str = None):
                                             recorded_count += 1
                             except json.JSONDecodeError:
                                 continue
-            
+
             # Only include if:
             # 1. It's the selected language, OR
             # 2. It has existing recordings
@@ -1046,7 +1046,7 @@ async def get_recording_stats(profile_name: str, selected_language: str = None):
                 should_include = True
             elif recorded_count > 0:
                 should_include = True
-            
+
             if should_include:
                 stats.append({
                     "language_code": language_code,
@@ -1054,7 +1054,7 @@ async def get_recording_stats(profile_name: str, selected_language: str = None):
                     "recorded": recorded_count,
                     "total": total_prompts
                 })
-    
+
     return stats
 
 # Open recordings folder
@@ -1062,17 +1062,17 @@ async def get_recording_stats(profile_name: str, selected_language: str = None):
 async def open_recordings_folder(profile_name: str):
     """Open the recordings folder for a profile in the file explorer"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         return {"success": False, "error": "Profile not found"}
-    
+
     recordings_dir = profile_dir / "recordings"
     recordings_dir.mkdir(exist_ok=True)
-    
+
     try:
         import subprocess
         import platform
-        
+
         system = platform.system()
         if system == "Windows":
             subprocess.Popen(['explorer', str(recordings_dir)], shell=False)
@@ -1080,7 +1080,7 @@ async def open_recordings_folder(profile_name: str):
             subprocess.Popen(["open", str(recordings_dir)])
         else:  # Linux
             subprocess.Popen(["xdg-open", str(recordings_dir)])
-        
+
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -1101,17 +1101,17 @@ async def save_recording(
         profile_dir = VOICES_DIR / profile_id
         recordings_dir = profile_dir / "recordings"
         recordings_dir.mkdir(exist_ok=True)
-        
+
         # Parse prompt list name from ID - handle both formats
         if prompt_list_id.startswith(f"{profile_id}_"):
             prompt_list_name = prompt_list_id[len(profile_id) + 1:]
         else:
             prompt_list_name = prompt_list_id
-        
+
         # Extract prompt ID from prompt file to get actual prompt number
         prompt_file = profile_dir / "prompts" / f"{prompt_list_name}.txt"
-        prompt_number = f"{prompt_index+1:05d}"  # Default to 1-based numbering
-        
+        prompt_number = f"{prompt_index+1:04d}"  # Default to 1-based numbering
+
         if prompt_file.exists():
             try:
                 with open(prompt_file, "r", encoding="utf-8", errors="ignore") as f:
@@ -1119,27 +1119,32 @@ async def save_recording(
                     if prompt_index < len(lines):
                         line = lines[prompt_index]
                         if '\t' in line:
-                            prompt_number = line.split('\t')[0].strip()
+                            full_prompt_id = line.split('\t')[0].strip()
+                            # Extract last 4 digits from prompt ID (e.g., 3000000001 -> 0001)
+                            if len(full_prompt_id) >= 4:
+                                prompt_number = full_prompt_id[-4:].zfill(4)
+                            else:
+                                prompt_number = full_prompt_id.zfill(4)
                         else:
-                            prompt_number = f"{prompt_index+1:05d}"
+                            prompt_number = f"{prompt_index+1:04d}"
             except Exception as e:
                 print(f"Error reading prompt file for naming: {e}")
-        
+
         # Extract language and category from prompt_list_name
         parts = prompt_list_name.split('_')
         language_code = parts[0]  # e.g., sv-SE
         category = parts[-1]  # e.g., General
-        
+
         # Generate filename with prompt number first
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{prompt_number}_{language_code}_{category}_{timestamp}.wav"
         file_path = recordings_dir / filename
-        
+
         # Save the audio file
         contents = await audio.read()
         with open(file_path, 'wb') as f:
             f.write(contents)
-        
+
         # Update metadata
         metadata_file = profile_dir / "metadata.jsonl"
         metadata = {
@@ -1151,13 +1156,13 @@ async def save_recording(
         }
         with open(metadata_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(metadata) + "\n")
-        
+
         # Calculate duration (this is a simple approximation)
         # In a real implementation, you'd use an audio library to get actual duration
         duration = len(contents) / 44100 / 2  # Rough estimate for 44.1kHz 16-bit audio
-        
+
         return JSONResponse({"success": True, "duration": duration})
-        
+
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
@@ -1168,13 +1173,13 @@ async def get_recording_history(profile_name: str, limit: int = 10, offset: int 
     profile_dir = VOICES_DIR / profile_name
     recordings_dir = profile_dir / "recordings"
     metadata_file = profile_dir / "metadata.jsonl"
-    
+
     if not recordings_dir.exists():
         return []
-    
+
     # Get all recording files and their metadata
     recordings = []
-    
+
     # Create a lookup for metadata by filename
     metadata_lookup = {}
     if metadata_file.exists():
@@ -1188,12 +1193,12 @@ async def get_recording_history(profile_name: str, limit: int = 10, offset: int 
                             metadata_lookup[filename] = metadata
                     except json.JSONDecodeError:
                         continue
-    
+
     # Scan actual files in recordings directory
     for file_path in recordings_dir.glob("*.wav"):
         filename = file_path.name
         file_stat = file_path.stat()
-        
+
         # Get metadata if available, otherwise create basic info
         if filename in metadata_lookup:
             recording_info = metadata_lookup[filename].copy()
@@ -1218,14 +1223,14 @@ async def get_recording_history(profile_name: str, limit: int = 10, offset: int 
                     "prompt_list": "unknown",
                     "timestamp": "unknown"
                 }
-        
+
         # Add file modification time for sorting
         recording_info["file_mtime"] = file_stat.st_mtime
         recordings.append(recording_info)
-    
+
     # Sort by file modification time, newest first
     recordings.sort(key=lambda x: x.get("file_mtime", 0), reverse=True)
-    
+
     # Return paginated results
     return recordings[offset:offset+limit]
 
@@ -1246,19 +1251,19 @@ async def get_recording_for_prompt(profile_name: str, prompt_list_id: str, promp
     profile_dir = VOICES_DIR / profile_name
     recordings_dir = profile_dir / "recordings"
     metadata_file = profile_dir / "metadata.jsonl"
-    
+
     # Parse prompt list name
     if prompt_list_id.startswith(f"{profile_name}_"):
         prompt_name = prompt_list_id[len(profile_name) + 1:]
     else:
         prompt_name = prompt_list_id
-    
+
     if metadata_file.exists() and recordings_dir.exists():
         with open(metadata_file, "r", encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     metadata = json.loads(line.strip())
-                    if (metadata.get("prompt_list") == prompt_name and 
+                    if (metadata.get("prompt_list") == prompt_name and
                         metadata.get("prompt_index") == prompt_index):
                         filename = metadata.get("filename")
                         if filename:
@@ -1266,7 +1271,7 @@ async def get_recording_for_prompt(profile_name: str, prompt_list_id: str, promp
                             # Only return filename if the actual file exists
                             if file_path.exists():
                                 return {"filename": filename}
-    
+
     return {"filename": None}
 
 # Get all available prompt lists
@@ -1274,7 +1279,7 @@ async def get_recording_for_prompt(profile_name: str, prompt_list_id: str, promp
 async def get_all_prompts():
     """Get all available prompt lists"""
     prompts = []
-    
+
     # Scan all profiles and their prompts directories
     for profile_dir in VOICES_DIR.iterdir():
         if profile_dir.is_dir() and profile_dir.name not in ("__pycache__", "example"):
@@ -1304,7 +1309,7 @@ async def get_all_prompts():
                     except Exception as e:
                         print(f"Error reading prompt file {prompt_file}: {e}")
                         continue
-    
+
     return prompts
 
 # Create a new prompt list
@@ -1315,21 +1320,21 @@ async def create_prompt_list(prompt_data: dict):
         name = prompt_data.get("name")
         language = prompt_data.get("language", "en-US")
         prompts = prompt_data.get("prompts", [])
-        
+
         if not name:
             return {"success": False, "error": "Prompt list name is required"}
-        
+
         # For now, save to the example profile
         profile_dir = VOICES_DIR / "example"
         prompts_dir = profile_dir / "prompts"
         prompts_dir.mkdir(exist_ok=True)
-        
+
         file_path = prompts_dir / f"{name}.txt"
-        
+
         with open(file_path, "w", encoding="utf-8") as f:
             for prompt in prompts:
                 f.write(f"{prompt}\n")
-        
+
         return {"success": True, "message": "Prompt list created successfully"}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -1343,12 +1348,12 @@ async def delete_prompt_list(prompt_id: str):
         parts = prompt_id.split("_", 1)
         if len(parts) != 2:
             return {"success": False, "error": "Invalid prompt ID format"}
-        
+
         profile_name, prompt_name = parts
-        
+
         profile_dir = VOICES_DIR / profile_name
         file_path = profile_dir / "prompts" / f"{prompt_name}.txt"
-        
+
         if file_path.exists():
             file_path.unlink()
             return {"success": True, "message": "Prompt list deleted successfully"}
@@ -1363,7 +1368,7 @@ async def get_prompt_sources():
     """Get available prompt sources and languages"""
     # Use local repository prompts directory
     base_prompts_dir = PROMPTS_DIR
-    
+
     # Scan available languages in piper_recording_studio
     piper_languages = []
     if base_prompts_dir.exists():
@@ -1377,13 +1382,13 @@ async def get_prompt_sources():
                 else:
                     lang_code = lang_name
                     lang_display = lang_name
-                
+
                 piper_languages.append({
                     "code": lang_code,
                     "display": lang_display,
                     "directory": lang_name
                 })
-    
+
     return {
         "sources": [
             {
@@ -1402,10 +1407,10 @@ async def get_prompt_sources():
 async def export_page(request: Request, profile_name: str):
     """Render the export page"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     return templates.TemplateResponse("profiles.html", {
         "request": request,
         "profile_name": profile_name,
@@ -1416,15 +1421,15 @@ async def export_page(request: Request, profile_name: str):
 async def export_profile(profile_name: str):
     """Export a profile to Piper format"""
     profile_dir = VOICES_DIR / profile_name
-    
+
     if not profile_dir.exists():
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     # Export the dataset
     # This would use the export_dataset function from utils.export
     export_dir = Path(f"exports/{profile_name}")
     export_dir.mkdir(parents=True, exist_ok=True)
-    
+
     return {"message": "Dataset exported successfully", "export_path": str(export_dir)}
 
 # Additional dashboard routes
