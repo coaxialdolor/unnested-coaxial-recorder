@@ -143,13 +143,24 @@ elif [ "$OS" == "windows" ]; then
     print_status "2. FFmpeg added to PATH (download from https://ffmpeg.org/)"
     print_status "3. Consider installing espeak via: conda install -c conda-forge espeak"
 
-    # Optionally offer to install via chocolatey if available
-    if command -v choco &>/dev/null; then
+    # Try multiple Windows package managers
+    if command -v winget &>/dev/null; then
+        print_status "Winget detected. Installing FFmpeg via Winget..."
+        winget install -e --id Gyan.FFmpeg 2>/dev/null || {
+            print_warning "Winget installation failed, trying Chocolatey..."
+            if command -v choco &>/dev/null; then
+                choco install ffmpeg -y
+                print_success "FFmpeg installed via Chocolatey"
+            else
+                print_warning "Please install FFmpeg manually from: https://ffmpeg.org/download.html"
+            fi
+        } && print_success "FFmpeg installed via Winget"
+    elif command -v choco &>/dev/null; then
         print_status "Chocolatey detected. Installing packages via Chocolatey..."
         choco install ffmpeg -y
         print_success "FFmpeg installed via Chocolatey"
     else
-        print_warning "Chocolatey not found. Please install FFmpeg manually."
+        print_warning "No package manager found. Please install FFmpeg manually."
         print_warning "Download from: https://ffmpeg.org/download.html"
     fi
 fi
@@ -207,7 +218,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Install PyTorch with appropriate CUDA support
-print_status "Installing PyTorch..."
+print_status "Installing PyTorch (this may take 5-10 minutes)..."
 if [ "$OS" == "windows" ]; then
     # Windows - install CPU version by default, user can install CUDA manually
     pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
@@ -219,6 +230,7 @@ else
         pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
     }
 fi
+print_success "PyTorch installation completed"
 
 # Install core requirements
 print_status "Installing core Python dependencies..."
@@ -269,7 +281,7 @@ pip install "piper-tts[train]" 2>/dev/null || {
     print_warning "Piper training dependencies failed, trying alternative approach..."
 
     # Fallback: Download and install from source
-    print_status "Setting up Piper TTS from source..."
+    print_status "Setting up Piper TTS from source (this may take 10-15 minutes)..."
 
     # Create training directory
     mkdir -p training
@@ -277,18 +289,22 @@ pip install "piper-tts[train]" 2>/dev/null || {
 
     # Download Piper TTS if not already present
     if [ ! -d "piper" ]; then
-        print_status "Downloading Piper TTS..."
+        print_status "Downloading Piper TTS repository (large download, please wait)..."
         git clone https://github.com/rhasspy/piper.git
         if [ $? -ne 0 ]; then
             print_error "Failed to clone Piper TTS repository!"
             exit 1
         fi
+        print_success "Piper TTS repository downloaded"
+    else
+        print_status "Piper TTS repository already exists, skipping download"
     fi
 
     # Install the runtime version first
     cd piper/src/python_run
     print_status "Installing Piper TTS runtime from source..."
     pip install -e .
+    print_success "Piper TTS runtime installed"
 
     # Install the training version (with workaround for missing piper-phonemize)
     cd ../python
@@ -297,6 +313,7 @@ pip install "piper-tts[train]" 2>/dev/null || {
         print_warning "Piper training installation failed, trying without dependencies..."
         pip install -e . --no-deps
     }
+    print_success "Piper TTS training installed"
 
     # Return to the root directory
     cd ../../../..
@@ -397,14 +414,54 @@ EOF
 
 chmod +x test_installation.py
 
-# Run installation test
+# Run installation test and collect results
 print_status "Running installation test..."
 $PYTHON test_installation.py
+INSTALLATION_TEST_RESULT=$?
 
-if [ $? -eq 0 ]; then
+# Initialize installation summary
+INSTALLATION_SUMMARY=""
+FAILED_COMPONENTS=""
+SUCCESSFUL_COMPONENTS=""
+
+# Check individual components
+print_status "Verifying installation components..."
+
+# Check core components
+if python -c "import fastapi, uvicorn, pydub, numpy, pandas" 2>/dev/null; then
+    SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Core Dependencies"
+else
+    FAILED_COMPONENTS="$FAILED_COMPONENTS Core Dependencies"
+fi
+
+# Check training components
+if python -c "import torch, torchaudio, transformers, datasets, librosa, soundfile, scipy, sklearn" 2>/dev/null; then
+    SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Training Dependencies"
+else
+    FAILED_COMPONENTS="$FAILED_COMPONENTS Training Dependencies"
+fi
+
+# Check TTS components
+if python -c "import piper, phonemizer" 2>/dev/null; then
+    SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS TTS Dependencies"
+else
+    FAILED_COMPONENTS="$FAILED_COMPONENTS TTS Dependencies"
+fi
+
+# Check Piper training
+if python -c "import piper_train" 2>/dev/null; then
+    SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Piper Training"
+else
+    FAILED_COMPONENTS="$FAILED_COMPONENTS Piper Training"
+fi
+
+# Generate summary
+if [ $INSTALLATION_TEST_RESULT -eq 0 ]; then
     print_success "Installation test passed!"
+    INSTALLATION_SUMMARY="✅ All components installed successfully"
 else
     print_warning "Some components may not be properly installed."
+    INSTALLATION_SUMMARY="⚠️  Partial installation completed"
 fi
 
 # Create launch script
@@ -468,11 +525,40 @@ print_status "Setting up file permissions..."
 chmod +x *.sh
 chmod +x test_installation.py
 
-print_success "Installation completed successfully!"
+print_success "Installation completed!"
 echo ""
 echo "🎉 Coaxial Recorder with Piper TTS Training is ready!"
 echo ""
-echo "Next steps:"
+echo "📊 INSTALLATION SUMMARY:"
+echo "========================"
+echo "$INSTALLATION_SUMMARY"
+echo ""
+
+if [ -n "$SUCCESSFUL_COMPONENTS" ]; then
+    echo "✅ Successfully Installed:"
+    for component in $SUCCESSFUL_COMPONENTS; do
+        echo "   - $component"
+    done
+    echo ""
+fi
+
+if [ -n "$FAILED_COMPONENTS" ]; then
+    echo "❌ Failed to Install:"
+    for component in $FAILED_COMPONENTS; do
+        echo "   - $component"
+    done
+    echo ""
+    echo "🔧 Recovery Suggestions:"
+    echo "   - Run the installer again: ./install.sh"
+    echo "   - Check your internet connection"
+    echo "   - Ensure you have sufficient disk space"
+    echo "   - Try installing missing packages manually:"
+    echo "     source venv/bin/activate"
+    echo "     pip install <package-name>"
+    echo ""
+fi
+
+echo "🚀 Next Steps:"
 echo "1. Activate the virtual environment:"
 if [ "$OS" == "windows" ]; then
     echo "   source venv/Scripts/activate"
@@ -492,6 +578,7 @@ echo ""
 echo "3. Or test the installation:"
 echo "   python test_installation.py"
 echo ""
+
 if [ "$OS" == "windows" ]; then
     echo "📝 Windows Notes:"
     echo "   - If you encounter issues, ensure Visual Studio Build Tools are installed"
@@ -499,4 +586,11 @@ if [ "$OS" == "windows" ]; then
     echo "   - Consider using conda for espeak: conda install -c conda-forge espeak"
     echo ""
 fi
+
+if [ -n "$FAILED_COMPONENTS" ]; then
+    echo "⚠️  Note: Some features may not work due to missing components."
+    echo "   The core recording functionality should still work."
+    echo ""
+fi
+
 print_success "Happy voice training! 🎤🤖"
