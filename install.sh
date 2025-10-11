@@ -578,6 +578,11 @@ elif [ "$CUDA_AVAILABLE" -eq 1 ]; then
 
     if [ "$RECOMMENDED_CUDA" = "cu128" ]; then
         print_warning "Installing CUDA 12.8 build for RTX 50-series compatibility..."
+        # Pre-install dependencies from PyPI to avoid pip resolution issues
+        print_status "Installing PyTorch dependencies..."
+        pip install typing-extensions filelock fsspec jinja2 networkx sympy mpmath >/dev/null 2>&1 || true
+
+        # Now install PyTorch with CUDA 12.8
         pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128 || {
             print_error "CUDA 12.8 installation failed!"
             print_warning "RTX 5060 Ti requires PyTorch with CUDA 12.8+"
@@ -588,6 +593,9 @@ elif [ "$CUDA_AVAILABLE" -eq 1 ]; then
             }
         }
     elif [ "$RECOMMENDED_CUDA" = "cu121" ]; then
+        # Pre-install dependencies to avoid pip issues
+        pip install typing-extensions filelock fsspec jinja2 networkx sympy mpmath >/dev/null 2>&1 || true
+
         pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121 || {
             print_warning "CUDA 12.1 installation failed, trying CUDA 11.8..."
             pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118 || {
