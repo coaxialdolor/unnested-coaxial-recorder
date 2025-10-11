@@ -37,10 +37,37 @@ def check_dependencies():
     try:
         import torch
         logging.info(f"PyTorch version: {torch.__version__}")
-        if torch.cuda.is_available():
-            logging.info(f"CUDA available: {torch.cuda.device_count()} device(s)")
-        else:
-            logging.info("CUDA not available, using CPU")
+
+        # Try to import GPU compatibility utilities
+        try:
+            from utils.gpu_compat import check_gpu_compatibility
+
+            # Check GPU compatibility
+            gpu_status = check_gpu_compatibility()
+            if gpu_status['cuda_available']:
+                logging.info(f"CUDA available: {gpu_status['device_count']} device(s)")
+                for device in gpu_status['devices']:
+                    logging.info(f"  - {device['name']} (Compute Capability: {device['compute_capability']})")
+
+                if not gpu_status['compatible']:
+                    logging.warning("GPU compatibility issue detected!")
+                    for warning in gpu_status['warnings']:
+                        logging.warning(f"  {warning}")
+                    if gpu_status['recommended_action']:
+                        logging.warning(f"  Recommended: {gpu_status['recommended_action']}")
+                else:
+                    logging.info("GPU is compatible and ready for training")
+            else:
+                logging.info("CUDA not available, using CPU")
+                if gpu_status['warnings']:
+                    for warning in gpu_status['warnings']:
+                        logging.warning(warning)
+        except ImportError:
+            # Fallback if gpu_compat module not available
+            if torch.cuda.is_available():
+                logging.info(f"CUDA available: {torch.cuda.device_count()} device(s)")
+            else:
+                logging.info("CUDA not available, using CPU")
     except ImportError:
         missing_deps.append("torch")
 

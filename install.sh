@@ -57,16 +57,21 @@ print_error() {
 }
 
 # Check if running on macOS, Linux, or Windows
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    OS="macos"
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    OS="linux"
-elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    OS="windows"
-else
-    print_error "Unsupported operating system: $OSTYPE"
-    exit 1
-fi
+case "$OSTYPE" in
+    darwin*)
+        OS="macos"
+        ;;
+    linux-gnu*)
+        OS="linux"
+        ;;
+    msys|win32)
+        OS="windows"
+        ;;
+    *)
+        print_error "Unsupported operating system: $OSTYPE"
+        exit 1
+        ;;
+esac
 
 print_status "Detected operating system: $OS"
 
@@ -91,16 +96,17 @@ check_local_python311() {
 # Better Python detection function
 get_system_python() {
     # First check if we have a local Python 3.11
-    LOCAL_PYTHON_CMD=$(check_local_python311)
+    # Use || true to prevent set -e from exiting on return 1
+    LOCAL_PYTHON_CMD=$(check_local_python311 2>/dev/null || true)
     if [ -n "$LOCAL_PYTHON_CMD" ] && [ -f "$LOCAL_PYTHON_CMD" ]; then
         echo "$LOCAL_PYTHON_CMD"
         return 0
     fi
 
     # Fall back to system Python
-    if command -v python3 &>/dev/null; then
+    if command -v python3 >/dev/null 2>&1; then
         command -v python3
-    elif command -v python &>/dev/null; then
+    elif command -v python >/dev/null 2>&1; then
         command -v python
     else
         return 1
@@ -120,21 +126,71 @@ CURRENT_MINOR=$(echo $CURRENT_VERSION | cut -d'.' -f2)
 print_success "Found system Python $CURRENT_VERSION"
 
 # Check if we already have local Python 3.11
-LOCAL_PYTHON_CMD=$(check_local_python311)
+LOCAL_PYTHON_CMD=$(check_local_python311 || true)
 
 if [ -n "$LOCAL_PYTHON_CMD" ]; then
     print_success "Found local Python 3.11 installation"
     PYTHON_CMD="$LOCAL_PYTHON_CMD"
-elif [ "$CURRENT_MINOR" -ne 11 ]; then
-    print_warning "Python 3.11 is recommended for optimal package compatibility."
-    print_warning "Current system version: $CURRENT_VERSION"
+elif [ "$CURRENT_MINOR" -ge 12 ]; then
+    print_warning "Python $CURRENT_VERSION detected - limited compatibility"
+    print_warning "Montreal Forced Aligner dependencies don't support Python 3.12+"
     echo ""
-    echo "Python 3.11 will be installed locally in this project folder."
-    echo "This keeps everything self-contained and easy to remove."
+    echo "COMPATIBILITY SUMMARY for Python $CURRENT_VERSION:"
+    echo "  ✅ Core application: Works"
+    echo "  ✅ PyTorch & ML packages: Works"
+    echo "  ✅ Audio processing: Works"
+    echo "  ❌ Montreal Forced Aligner: Will be SKIPPED"
     echo ""
-    read -p "Install Python 3.11 locally? [Y/n]: " install_311
+    echo "RECOMMENDED PYTHON VERSIONS:"
+    echo "  🥇 Python 3.10: Best compatibility (all packages work)"
+    echo "  🥈 Python 3.11: Good compatibility (most packages work, MFA updated)"
+    echo "  🥉 Python 3.12+: Limited (MFA and some dependencies won't work)"
+    echo ""
+    echo "You can:"
+    echo "  1. Continue with Python $CURRENT_VERSION (MFA will be skipped)"
+    echo "  2. Install Python 3.10 or 3.11 with pyenv:"
+    echo "     brew install pyenv"
+    echo "     pyenv install 3.10.13"
+    echo "     pyenv local 3.10.13"
+    echo ""
+    read -p "Continue with Python $CURRENT_VERSION anyway? [Y/n]: " continue_anyway
 
-    if [[ $install_311 =~ ^[Yy]?$ ]]; then
+    if [ -z "$continue_anyway" ] || [ "$continue_anyway" = "Y" ] || [ "$continue_anyway" = "y" ]; then
+        print_status "Continuing with Python $CURRENT_VERSION..."
+        PYTHON_CMD="$CURRENT_PYTHON"
+        print_warning "Montreal Forced Aligner will be skipped"
+    else
+        print_error "Installation cancelled."
+        echo "Install Python 3.10 or 3.11 and run this script again."
+        exit 1
+    fi
+elif [ "$CURRENT_MINOR" -eq 11 ]; then
+    print_success "Python 3.11 detected - excellent choice!"
+    print_warning "Note: MFA works best with Python 3.10, but 3.11 should work"
+    PYTHON_CMD="$CURRENT_PYTHON"
+elif [ "$CURRENT_MINOR" -eq 10 ]; then
+    print_success "Python 3.10 detected - perfect! This is the best version for all dependencies."
+    PYTHON_CMD="$CURRENT_PYTHON"
+elif [ "$CURRENT_MINOR" -lt 10 ]; then
+    print_warning "Python $CURRENT_VERSION is older than recommended (3.10+)"
+    print_warning "Some packages may not work correctly"
+    echo ""
+    read -p "Continue with Python $CURRENT_VERSION anyway? [Y/n]: " continue_anyway
+
+    if [ -z "$continue_anyway" ] || [ "$continue_anyway" = "Y" ] || [ "$continue_anyway" = "y" ]; then
+        PYTHON_CMD="$CURRENT_PYTHON"
+    else
+        print_error "Installation cancelled."
+        exit 1
+    fi
+else
+    # Fallback
+    PYTHON_CMD="$CURRENT_PYTHON"
+fi
+
+# Legacy code for local Python 3.11 installation (kept for reference but not triggered by default)
+if false; then
+    if [ -z "$install_311" ] || [ "$install_311" = "Y" ] || [ "$install_311" = "y" ]; then
         print_status "Installing Python 3.11 locally using prebuilt binaries..."
 
         # Create python311 directory before extraction
@@ -144,7 +200,7 @@ elif [ "$CURRENT_MINOR" -ne 11 ]; then
             print_status "Downloading Python 3.11 for macOS..."
 
             # Download the actual binary distribution, not the installer package
-            if command -v curl &>/dev/null; then
+            if command -v curl >/dev/null 2>&1; then
                 curl -L -o python311-macos.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-apple-darwin-install_only.tar.gz"
             else
                 wget -O python311-macos.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-apple-darwin-install_only.tar.gz"
@@ -174,7 +230,7 @@ elif [ "$CURRENT_MINOR" -ne 11 ]; then
             print_status "Downloading standalone Python 3.11 for Linux..."
 
             # Download the standalone Linux build from python-build-standalone
-            if command -v curl &>/dev/null; then
+            if command -v curl >/dev/null 2>&1; then
                 curl -L -o python311-linux.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-unknown-linux-gnu-install_only.tar.gz"
             else
                 wget -O python311-linux.tar.gz "https://github.com/indygreg/python-build-standalone/releases/download/20231002/cpython-3.11.6%2B20231002-x86_64-unknown-linux-gnu-install_only.tar.gz"
@@ -222,7 +278,7 @@ elif [ "$CURRENT_MINOR" -ne 11 ]; then
             print_status "Downloading portable Python 3.11 for Windows..."
 
             # Download portable/embeddable Python from official source
-            if command -v curl &>/dev/null; then
+            if command -v curl >/dev/null 2>&1; then
                 curl -L -o python311-windows.zip "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
             else
                 wget -O python311-windows.zip "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
@@ -236,7 +292,7 @@ elif [ "$CURRENT_MINOR" -ne 11 ]; then
 
                 # Also get and install pip
                 print_status "Setting up pip for portable Python..."
-                if command -v curl &>/dev/null; then
+                if command -v curl >/dev/null 2>&1; then
                     curl -L -o get-pip.py "https://bootstrap.pypa.io/get-pip.py"
                 else
                     wget -O get-pip.py "https://bootstrap.pypa.io/get-pip.py"
@@ -275,7 +331,7 @@ else
 fi
 
 # Verify we can use the chosen Python
-if ! $PYTHON_CMD --version &>/dev/null; then
+if ! $PYTHON_CMD --version >/dev/null 2>&1; then
     print_warning "Chosen Python not accessible, falling back to system Python"
     PYTHON_CMD="$CURRENT_PYTHON"
 fi
@@ -293,7 +349,7 @@ fi
 
 # Check for Git
 print_status "Checking Git installation..."
-if ! command -v git &>/dev/null; then
+if ! command -v git >/dev/null 2>&1; then
     print_error "Git is required but not installed. Please install Git first."
     exit 1
 fi
@@ -304,7 +360,7 @@ print_status "Installing system dependencies..."
 
 if [ "$OS" == "macos" ]; then
     # Check for Homebrew
-    if ! command -v brew &>/dev/null; then
+    if ! command -v brew >/dev/null 2>&1; then
         print_warning "Homebrew not found. Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
@@ -320,7 +376,7 @@ if [ "$OS" == "macos" ]; then
 
 elif [ "$OS" == "linux" ]; then
     # Detect package manager
-    if command -v apt-get &>/dev/null; then
+    if command -v apt-get >/dev/null 2>&1; then
         print_status "Installing system packages via apt..."
         sudo apt-get update
         sudo apt-get install -y espeak-ng ffmpeg portaudio19-dev python3-dev build-essential
@@ -330,7 +386,7 @@ elif [ "$OS" == "linux" ]; then
             print_status "Creating espeak symlink for phonemizer compatibility..."
             sudo ln -sf /usr/bin/espeak-ng /usr/bin/espeak
         fi
-    elif command -v yum &>/dev/null; then
+    elif command -v yum >/dev/null 2>&1; then
         print_status "Installing system packages via yum..."
         sudo yum install -y espeak-ng ffmpeg portaudio-devel python3-devel gcc gcc-c++
 
@@ -339,7 +395,7 @@ elif [ "$OS" == "linux" ]; then
             print_status "Creating espeak symlink for phonemizer compatibility..."
             sudo ln -sf /usr/bin/espeak-ng /usr/bin/espeak
         fi
-    elif command -v pacman &>/dev/null; then
+    elif command -v pacman >/dev/null 2>&1; then
         print_status "Installing system packages via pacman..."
         sudo pacman -S --noconfirm espeak-ng ffmpeg portaudio python
 
@@ -360,18 +416,18 @@ elif [ "$OS" == "windows" ]; then
     print_status "3. Consider installing espeak via: conda install -c conda-forge espeak"
 
     # Try multiple Windows package managers
-    if command -v winget &>/dev/null; then
+    if command -v winget >/dev/null 2>&1; then
         print_status "Winget detected. Installing FFmpeg via Winget..."
         winget install -e --id Gyan.FFmpeg 2>/dev/null || {
             print_warning "Winget installation failed, trying Chocolatey..."
-            if command -v choco &>/dev/null; then
+            if command -v choco >/dev/null 2>&1; then
                 choco install ffmpeg -y
                 print_success "FFmpeg installed via Chocolatey"
             else
                 print_warning "Please install FFmpeg manually from: https://ffmpeg.org/download.html"
             fi
         } && print_success "FFmpeg installed via Winget"
-    elif command -v choco &>/dev/null; then
+    elif command -v choco >/dev/null 2>&1; then
         print_status "Chocolatey detected. Installing packages via Chocolatey..."
         choco install ffmpeg -y
         print_success "FFmpeg installed via Chocolatey"
@@ -387,7 +443,7 @@ print_status "Setting up Python virtual environment..."
 if [ -d "venv" ]; then
     print_warning "Virtual environment already exists."
     read -p "Do you want to recreate it? (y/N): " recreate
-    if [[ $recreate =~ ^[Yy]$ ]]; then
+    if [ "$recreate" = "y" ] || [ "$recreate" = "Y" ]; then
         print_status "Removing existing virtual environment..."
         rm -rf venv
     else
@@ -418,7 +474,7 @@ else
 fi
 
 # Verify virtual environment is active
-if [[ "$VIRTUAL_ENV" == "" ]]; then
+if [ -z "$VIRTUAL_ENV" ]; then
     print_error "Failed to activate virtual environment!"
     exit 1
 fi
@@ -433,20 +489,138 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Install PyTorch with appropriate CUDA support
-print_status "Installing PyTorch (this may take 5-10 minutes)..."
-if [ "$OS" == "windows" ]; then
-    # Windows - install CPU version by default, user can install CUDA manually
-    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Detect GPU and install appropriate PyTorch version
+print_status "Detecting GPU configuration..."
+
+# Function to detect NVIDIA GPU and CUDA capability
+detect_nvidia_gpu() {
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        GPU_INFO=$(nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader 2>/dev/null | head -1)
+        if [ -n "$GPU_INFO" ]; then
+            GPU_NAME=$(echo "$GPU_INFO" | cut -d',' -f1 | xargs)
+            COMPUTE_CAP=$(echo "$GPU_INFO" | cut -d',' -f2 | xargs)
+            echo "$GPU_NAME|$COMPUTE_CAP"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Detect GPU
+CUDA_AVAILABLE=0
+GPU_DETECTED=""
+COMPUTE_CAPABILITY=""
+RECOMMENDED_CUDA=""
+
+if [ "$OS" != "macos" ]; then
+    GPU_RESULT=$(detect_nvidia_gpu || true)
+    if [ -n "$GPU_RESULT" ]; then
+        CUDA_AVAILABLE=1
+        GPU_DETECTED=$(echo "$GPU_RESULT" | cut -d'|' -f1)
+        COMPUTE_CAPABILITY=$(echo "$GPU_RESULT" | cut -d'|' -f2)
+
+        print_success "NVIDIA GPU detected: $GPU_DETECTED"
+        print_status "Compute Capability: $COMPUTE_CAPABILITY"
+
+        # Determine best CUDA version based on compute capability
+        # RTX 5060 Ti and newer (sm_120+) need CUDA 12.8+
+        # RTX 4090, 4080, etc (sm_89) need CUDA 11.8+
+        # RTX 3090, 3080, etc (sm_86) need CUDA 11.1+
+        COMPUTE_MAJOR=$(echo "$COMPUTE_CAPABILITY" | cut -d'.' -f1)
+
+        if [ "$COMPUTE_MAJOR" -ge 12 ]; then
+            RECOMMENDED_CUDA="cu128"
+            print_warning "RTX 50-series GPU detected (Compute Capability 12.x)"
+            print_warning "Requires PyTorch with CUDA 12.8+ for sm_120 support"
+        elif [ "$COMPUTE_MAJOR" -ge 9 ]; then
+            RECOMMENDED_CUDA="cu121"
+            print_status "RTX 40-series GPU detected, using CUDA 12.1"
+        else
+            RECOMMENDED_CUDA="cu118"
+            print_status "Using CUDA 11.8 for compatibility"
+        fi
+    else
+        print_warning "No NVIDIA GPU detected, will install CPU version"
+    fi
 else
-    # macOS and Linux - try CUDA first, fallback to CPU
-    print_status "Attempting to install PyTorch with CUDA support..."
-    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118 2>/dev/null || {
-        print_warning "CUDA installation failed, installing CPU version..."
-        pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-    }
+    print_status "macOS detected - will install CPU version (Apple Silicon uses MPS)"
 fi
-print_success "PyTorch installation completed"
+
+# Install PyTorch with appropriate backend
+print_status "Installing PyTorch (this may take 5-10 minutes)..."
+
+if [ "$OS" == "macos" ]; then
+    # macOS - CPU/MPS version
+    print_status "Installing PyTorch for macOS (CPU/Apple Silicon MPS support)..."
+    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+    print_success "PyTorch installed for macOS"
+elif [ "$CUDA_AVAILABLE" -eq 1 ]; then
+    # Linux/Windows with NVIDIA GPU
+    print_status "Installing PyTorch with CUDA $RECOMMENDED_CUDA support..."
+
+    if [ "$RECOMMENDED_CUDA" = "cu128" ]; then
+        print_warning "Installing CUDA 12.8 build for RTX 50-series compatibility..."
+        pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128 || {
+            print_error "CUDA 12.8 installation failed!"
+            print_warning "RTX 5060 Ti requires PyTorch with CUDA 12.8+"
+            print_warning "Falling back to CUDA 12.1 (may not work with RTX 50-series)"
+            pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121 || {
+                print_warning "CUDA 12.1 failed, trying CPU version..."
+                pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+            }
+        }
+    elif [ "$RECOMMENDED_CUDA" = "cu121" ]; then
+        pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121 || {
+            print_warning "CUDA 12.1 installation failed, trying CUDA 11.8..."
+            pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118 || {
+                print_warning "CUDA 11.8 failed, installing CPU version..."
+                pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+            }
+        }
+    else
+        pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118 || {
+            print_warning "CUDA 11.8 installation failed, installing CPU version..."
+            pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+        }
+    fi
+    print_success "PyTorch installation completed"
+else
+    # No GPU detected or Windows without GPU
+    print_status "Installing PyTorch CPU version..."
+    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+    print_success "PyTorch CPU version installed"
+fi
+
+# Verify PyTorch installation and GPU support
+print_status "Verifying PyTorch installation..."
+python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}'); print(f'Device count: {torch.cuda.device_count() if torch.cuda.is_available() else 0}')" 2>/dev/null || {
+    print_warning "PyTorch verification had issues, but installation may still work"
+}
+
+# Test GPU if available
+if [ "$CUDA_AVAILABLE" -eq 1 ]; then
+    print_status "Testing GPU compatibility..."
+    python -c "
+import torch
+if torch.cuda.is_available():
+    try:
+        device = torch.device('cuda')
+        x = torch.randn(100, 100).to(device)
+        y = x @ x.T
+        print('✅ GPU test passed: CUDA operations work correctly')
+        print(f'   Using device: {torch.cuda.get_device_name(0)}')
+    except RuntimeError as e:
+        if 'no kernel image' in str(e):
+            print('❌ GPU test failed: No kernel image available')
+            print('   This usually means PyTorch was not compiled for your GPU architecture')
+            print(f'   Your GPU Compute Capability: $COMPUTE_CAPABILITY')
+            print('   You may need to upgrade PyTorch or use CPU mode')
+        else:
+            print(f'❌ GPU test failed: {e}')
+else:
+    print('⚠️  CUDA not available in PyTorch')
+" 2>&1 || print_warning "GPU test encountered issues"
+fi
 
 # Install core requirements
 print_status "Installing core Python dependencies..."
@@ -495,10 +669,10 @@ pip install piper-tts phonemizer
 
 # Verify espeak installation
 print_status "Verifying espeak installation..."
-if command -v espeak &>/dev/null; then
+if command -v espeak >/dev/null 2>&1; then
     print_success "espeak found: $(which espeak)"
     espeak --version 2>/dev/null || echo "espeak version check failed"
-elif command -v espeak-ng &>/dev/null; then
+elif command -v espeak-ng >/dev/null 2>&1; then
     print_success "espeak-ng found: $(which espeak-ng)"
     espeak-ng --version 2>/dev/null || echo "espeak-ng version check failed"
 else
@@ -709,11 +883,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Activate virtual environment
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    source venv/Scripts/activate
-else
-    source venv/bin/activate
-fi
+case "$OSTYPE" in
+    msys|win32)
+        source venv/Scripts/activate
+        ;;
+    *)
+        source venv/bin/activate
+        ;;
+esac
 
 # Check if training dependencies are available
 echo "Checking training dependencies..."
