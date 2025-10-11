@@ -64,6 +64,14 @@ else
     exit 1
 fi
 
+# Check for Git
+print_status "Checking Git installation..."
+if ! command -v git &>/dev/null; then
+    print_error "Git is required but not installed. Please install Git first."
+    exit 1
+fi
+print_success "Git found: $(git --version)"
+
 print_success "Found Python $PYTHON_VERSION"
 
 # Check Python version
@@ -129,9 +137,21 @@ elif [ "$OS" == "linux" ]; then
     fi
 
 elif [ "$OS" == "windows" ]; then
-    print_warning "Windows detected. Please ensure you have Visual Studio Build Tools installed."
-    print_warning "You may need to install espeak-ng and ffmpeg manually or via conda."
-    print_warning "For espeak, install via conda: conda install -c conda-forge espeak"
+    print_status "Windows detected. Setting up system dependencies..."
+    print_status "For Windows, please ensure you have:"
+    print_status "1. Visual Studio Build Tools (for compilation)"
+    print_status "2. FFmpeg added to PATH (download from https://ffmpeg.org/)"
+    print_status "3. Consider installing espeak via: conda install -c conda-forge espeak"
+
+    # Optionally offer to install via chocolatey if available
+    if command -v choco &>/dev/null; then
+        print_status "Chocolatey detected. Installing packages via Chocolatey..."
+        choco install ffmpeg -y
+        print_success "FFmpeg installed via Chocolatey"
+    else
+        print_warning "Chocolatey not found. Please install FFmpeg manually."
+        print_warning "Download from: https://ffmpeg.org/download.html"
+    fi
 fi
 
 # Create virtual environment FIRST
@@ -160,7 +180,12 @@ fi
 # Activate virtual environment
 print_status "Activating virtual environment..."
 if [ "$OS" == "windows" ]; then
-    source venv/Scripts/activate
+    # For Windows Git Bash/Cygwin compatibility
+    if [ -f "venv/Scripts/activate" ]; then
+        source venv/Scripts/activate
+    else
+        source venv/bin/activate  # Some Windows Python installations use this
+    fi
 else
     source venv/bin/activate
 fi
@@ -234,41 +259,48 @@ else
     print_warning "espeak/espeak-ng not found in PATH"
 fi
 
-# Download and setup Piper TTS
-print_status "Setting up Piper TTS..."
+# Install Piper TTS
+print_status "Installing Piper TTS..."
+pip install piper-tts
 
-# Create training directory
-mkdir -p training
-cd training
+# Try to install training dependencies (may fail on some systems)
+print_status "Installing Piper TTS training dependencies..."
+pip install "piper-tts[train]" 2>/dev/null || {
+    print_warning "Piper training dependencies failed, trying alternative approach..."
 
-# Download Piper TTS if not already present
-if [ ! -d "piper" ]; then
-    print_status "Downloading Piper TTS..."
-    git clone https://github.com/rhasspy/piper.git
-    if [ $? -ne 0 ]; then
-        print_error "Failed to clone Piper TTS repository!"
-        exit 1
+    # Fallback: Download and install from source
+    print_status "Setting up Piper TTS from source..."
+
+    # Create training directory
+    mkdir -p training
+    cd training
+
+    # Download Piper TTS if not already present
+    if [ ! -d "piper" ]; then
+        print_status "Downloading Piper TTS..."
+        git clone https://github.com/rhasspy/piper.git
+        if [ $? -ne 0 ]; then
+            print_error "Failed to clone Piper TTS repository!"
+            exit 1
+        fi
     fi
-fi
 
-# Install Piper dependencies from the correct directories
-print_status "Installing Piper TTS dependencies..."
+    # Install the runtime version first
+    cd piper/src/python_run
+    print_status "Installing Piper TTS runtime from source..."
+    pip install -e .
 
-# Install the runtime version first
-cd piper/src/python_run
-print_status "Installing Piper TTS runtime..."
-pip install -e .
+    # Install the training version (with workaround for missing piper-phonemize)
+    cd ../python
+    print_status "Installing Piper TTS training from source..."
+    pip install -e . --no-deps || {
+        print_warning "Piper training installation failed, trying without dependencies..."
+        pip install -e . --no-deps
+    }
 
-# Install the training version (with workaround for missing piper-phonemize)
-cd ../python
-print_status "Installing Piper TTS training..."
-pip install -e . --no-deps || {
-    print_warning "Piper training installation failed, trying without dependencies..."
-    pip install -e . --no-deps
+    # Return to the root directory
+    cd ../../../..
 }
-
-# Return to the root directory
-cd ../../../..
 
 # Create directories
 print_status "Creating necessary directories..."
@@ -408,6 +440,29 @@ EOF
 
 chmod +x launch_complete.sh
 
+# Create Windows batch launcher
+if [ "$OS" == "windows" ]; then
+    print_status "Creating Windows batch launcher..."
+    cat > launch_complete.bat << 'EOF'
+@echo off
+echo Activating virtual environment...
+call venv\Scripts\activate
+
+echo Checking training dependencies...
+python test_installation.py
+
+if %errorlevel% neq 0 (
+    echo ⚠️  Some training dependencies are missing. Training features may not work.
+    echo You can still use recording and post-processing features.
+)
+
+echo 🚀 Launching Coaxial Recorder...
+python app.py
+pause
+EOF
+    print_success "Windows batch launcher created: launch_complete.bat"
+fi
+
 # Final setup
 print_status "Setting up file permissions..."
 chmod +x *.sh
@@ -421,14 +476,27 @@ echo "Next steps:"
 echo "1. Activate the virtual environment:"
 if [ "$OS" == "windows" ]; then
     echo "   source venv/Scripts/activate"
+    echo "   # Or use: venv\\Scripts\\activate.bat"
 else
     echo "   source venv/bin/activate"
 fi
 echo ""
 echo "2. Launch the application:"
-echo "   ./launch_complete.sh"
+if [ "$OS" == "windows" ]; then
+    echo "   ./launch_complete.sh  # Git Bash"
+    echo "   # Or double-click: launch_complete.bat"
+else
+    echo "   ./launch_complete.sh"
+fi
 echo ""
 echo "3. Or test the installation:"
 echo "   python test_installation.py"
 echo ""
+if [ "$OS" == "windows" ]; then
+    echo "📝 Windows Notes:"
+    echo "   - If you encounter issues, ensure Visual Studio Build Tools are installed"
+    echo "   - Make sure FFmpeg is in your PATH"
+    echo "   - Consider using conda for espeak: conda install -c conda-forge espeak"
+    echo ""
+fi
 print_success "Happy voice training! 🎤🤖"
