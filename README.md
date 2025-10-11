@@ -1,7 +1,10 @@
-<<<<<<< HEAD
 # Voice Dataset Manager
 
 A comprehensive web application for managing voice datasets with recording, organization, and export capabilities for AI voice synthesis projects.
+
+> **📌 Windows Users:** See [WINDOWS_README.md](WINDOWS_README.md) for Windows-specific installation instructions!
+
+> **📌 All Users:** For quick setup, see [SETUP_GUIDE.md](SETUP_GUIDE.md)
 
 ## Features
 
@@ -177,7 +180,7 @@ Exports datasets in the format expected by Piper voice synthesis:
 ## Browser Compatibility
 
 - **Chrome/Chromium**: Full support with all features
-- **Firefox**: Full support with all features  
+- **Firefox**: Full support with all features
 - **Safari**: Full support with all features
 - **Edge**: Full support with all features
 
@@ -205,7 +208,7 @@ Default audio settings are optimized for voice recording:
 The application includes several management scripts for easy operation:
 
 - **setup_venv.sh**: Creates virtual environment and installs dependencies
-- **activate_venv.sh**: Activates the virtual environment manually  
+- **activate_venv.sh**: Activates the virtual environment manually
 - **launch.sh**: Activates environment and starts the application
 - **kill_app.sh**: Stops the application and cleans up ports
 

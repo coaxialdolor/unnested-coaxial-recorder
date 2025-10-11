@@ -64,11 +64,13 @@ case "$OSTYPE" in
     linux-gnu*)
         OS="linux"
         ;;
-    msys|win32)
+    msys|win32|cygwin*)
         OS="windows"
         ;;
     *)
         print_error "Unsupported operating system: $OSTYPE"
+        print_error "Detected OSTYPE: $OSTYPE"
+        print_error "If you're on Windows, make sure you're using Git Bash, WSL, or Cygwin"
         exit 1
         ;;
 esac
@@ -474,10 +476,16 @@ fi
 print_status "Activating virtual environment..."
 if [ "$OS" == "windows" ]; then
     # For Windows Git Bash/Cygwin compatibility
+    # Try Scripts/activate first (Windows standard)
     if [ -f "venv/Scripts/activate" ]; then
         source venv/Scripts/activate
+    elif [ -f "venv/bin/activate" ]; then
+        # Fallback for some Python installations or WSL-like environments
+        source venv/bin/activate
     else
-        source venv/bin/activate  # Some Windows Python installations use this
+        print_error "Could not find venv activation script!"
+        print_error "Expected: venv/Scripts/activate or venv/bin/activate"
+        exit 1
     fi
 else
     source venv/bin/activate
@@ -894,8 +902,13 @@ cd "$SCRIPT_DIR"
 
 # Activate virtual environment
 case "$OSTYPE" in
-    msys|win32)
-        source venv/Scripts/activate
+    msys|win32|cygwin*)
+        # Windows: try Scripts first, then bin
+        if [ -f venv/Scripts/activate ]; then
+            source venv/Scripts/activate
+        else
+            source venv/bin/activate
+        fi
         ;;
     *)
         source venv/bin/activate

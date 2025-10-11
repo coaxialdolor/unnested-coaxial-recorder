@@ -2,10 +2,22 @@
 
 ## Installation
 
+### Linux / macOS / WSL
+
 ```bash
 # Run the installer
 bash install.sh
 ```
+
+### Windows (Git Bash / Cygwin)
+
+```bash
+# Make sure you're using Git Bash, Cygwin, or similar
+# NOT Windows CMD or PowerShell
+bash install.sh
+```
+
+**Note:** On Windows, make sure you have Python installed from python.org (not Microsoft Store version).
 
 The installer automatically:
 - ✅ Detects your Python version

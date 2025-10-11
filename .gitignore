@@ -4,6 +4,11 @@ env/
 .venv/
 /.venv/
 
+# Local Python installations
+python310/
+python311/
+python3*/
+
 # Python
 __pycache__/
 .mypy_cache/
