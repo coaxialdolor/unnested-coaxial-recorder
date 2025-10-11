@@ -1,74 +1,90 @@
 @echo off
-REM Windows Batch Installer for Coaxial Recorder
-REM This is a wrapper that calls the bash install script
+setlocal enabledelayedexpansion
 
+echo.
 echo ================================================================================
-echo Coaxial Recorder - Windows Installer
+echo    Coaxial Recorder - Windows Installer
 echo ================================================================================
 echo.
 
-REM Check if Git Bash is available
-where bash >nul 2>nul
-if %errorlevel% neq 0 (
+REM Change to the directory where this batch file is located
+cd /d "%~dp0"
+
+echo [1/5] Checking for bash (Git Bash/Cygwin/WSL)...
+where bash >nul 2>&1
+if errorlevel 1 (
+    echo.
     echo ERROR: bash not found!
     echo.
-    echo This installer requires Git Bash, Cygwin, or WSL.
+    echo Please install Git Bash, Cygwin, or WSL first:
+    echo   - Git for Windows: https://git-scm.com/download/win
+    echo   - Cygwin: https://www.cygwin.com/
     echo.
-    echo Please install one of the following:
-    echo   1. Git for Windows ^(includes Git Bash^): https://git-scm.com/download/win
-    echo   2. Cygwin: https://www.cygwin.com/
-    echo   3. WSL: https://docs.microsoft.com/en-us/windows/wsl/install
+    echo Then run this script again.
     echo.
-    echo After installation, run this script again.
     pause
     exit /b 1
 )
-
-REM Check if Python is installed
-where python >nul 2>nul
-if %errorlevel% neq 0 (
-    echo WARNING: Python not found in PATH!
-    echo.
-    echo Please install Python from https://www.python.org/downloads/
-    echo Make sure to check "Add Python to PATH" during installation.
-    echo.
-    echo Note: Do NOT use the Microsoft Store version of Python.
-    echo.
-    pause
-    echo Continuing anyway, the bash script will check for Python...
-    echo.
-)
-
-REM Check Python version
-python --version 2>nul
-if %errorlevel% equ 0 (
-    echo Found:
-    python --version
-    echo.
-)
-
-REM Run the bash installer
-echo Running bash installer...
+echo    Found bash: OK
 echo.
-bash install.sh
 
-if %errorlevel% neq 0 (
+echo [2/5] Checking for Python...
+where python >nul 2>&1
+if errorlevel 1 (
     echo.
-    echo ================================================================================
-    echo Installation failed or was cancelled.
-    echo ================================================================================
+    echo WARNING: Python not in PATH
+    echo.
+    echo Install Python from https://www.python.org/downloads/
+    echo Check "Add Python to PATH" during installation!
+    echo.
+    echo Continuing anyway - bash script will check more thoroughly...
+    echo.
+) else (
+    python --version
+)
+echo.
+
+echo [3/5] Verifying install.sh exists...
+if not exist "install.sh" (
+    echo.
+    echo ERROR: install.sh not found!
+    echo Current directory: %CD%
+    echo.
     pause
     exit /b 1
+)
+echo    Found install.sh: OK
+echo.
+
+echo [4/5] Launching bash installer...
+echo.
+echo ================================================================================
+bash.exe install.sh
+set INSTALL_EXIT_CODE=!errorlevel!
+echo ================================================================================
+echo.
+
+echo [5/5] Checking installation result...
+if !INSTALL_EXIT_CODE! neq 0 (
+    echo.
+    echo ERROR: Installation failed or was cancelled
+    echo Exit code: !INSTALL_EXIT_CODE!
+    echo.
+    echo Try running directly in Git Bash: bash install.sh
+    echo.
+    pause
+    exit /b !INSTALL_EXIT_CODE!
 )
 
 echo.
 echo ================================================================================
-echo Installation completed!
+echo    Installation Complete!
 echo ================================================================================
 echo.
 echo To start the application:
-echo   1. Run: launch_complete.bat
+echo   1. Double-click: launch_complete.bat
 echo   2. Or in Git Bash: bash launch_complete.sh
 echo.
+echo Then open your browser to: http://localhost:8000
+echo.
 pause
-
