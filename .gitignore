@@ -68,4 +68,6 @@ htmlcov/
 # voices/*/recordings/
 # voices/*/clips/test_audio/
 converted_models/
-python311-macos.tar.gz
+
+# Redundant/archived files
+probably_redundant/
