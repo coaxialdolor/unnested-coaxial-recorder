@@ -649,8 +649,68 @@
         }
 
         function discardRecording() {
-            document.getElementById('audioPlayback').classList.add('d-none');
-            audioChunks = [];
+            console.log('discardRecording called');
+            console.log('currentPromptIndex:', currentPromptIndex);
+            console.log('recordedPrompts:', recordedPrompts);
+            console.log('Has current prompt?', recordedPrompts.has(currentPromptIndex));
+            
+            // Check if this is an existing recording or a new one
+            if (recordedPrompts.has(currentPromptIndex)) {
+                // This is an existing recording - ask for confirmation
+                console.log('Existing recording detected - showing confirmation');
+                if (confirm(`Delete the existing recording for prompt #${currentPromptId}?\n\n"${currentPromptText}"\n\nThis action cannot be undone.`)) {
+                    deleteExistingRecording();
+                }
+            } else {
+                // This is a new unsaved recording - just discard it
+                console.log('New recording - discarding locally');
+                document.getElementById('audioPlayback').classList.add('d-none');
+                audioChunks = [];
+            }
+        }
+
+        function deleteExistingRecording() {
+            console.log('deleteExistingRecording called');
+            const url = `/api/delete_recording/${encodeURIComponent(currentProfileId)}/${encodeURIComponent(currentPromptListId)}/${currentPromptIndex}`;
+            console.log('DELETE request to:', url);
+            
+            // Delete the existing recording file and metadata
+            fetch(url, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    console.log('Deleting from recordedPrompts set');
+                    // Remove from recordedPrompts set
+                    recordedPrompts.delete(currentPromptIndex);
+                    
+                    // Hide the playback UI
+                    document.getElementById('audioPlayback').classList.add('d-none');
+                    
+                    // Update the current prompt display (badge and status)
+                    console.log('Calling loadCurrentPrompt to update UI');
+                    loadCurrentPrompt();
+                    
+                    // Refresh stats and history
+                    console.log('Refreshing stats and history');
+                    loadRecordingStats();
+                    loadRecordingHistory();
+                    
+                    alert('Recording deleted successfully');
+                } else {
+                    console.error('Delete failed:', data.message);
+                    alert('Error deleting recording: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting recording:', error);
+                alert('Error deleting recording: ' + error.message);
+            });
         }
 
         function skipPrompt() {

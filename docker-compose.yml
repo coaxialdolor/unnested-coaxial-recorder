@@ -38,6 +38,12 @@ services:
       - ./models:/app/models
       # Custom prompts (optional - users may add their own)
       - ./prompts:/app/prompts
+      # Templates (for development - live updates)
+      - ./templates:/app/templates
+      # Static files (for development - live updates)
+      - ./static:/app/static
+      # Main application (for development - live updates)
+      - ./app.py:/app/app.py
 
     environment:
       - CUDA_VISIBLE_DEVICES=0
@@ -85,6 +91,12 @@ services:
       - ./models:/app/models
       # Custom prompts (optional - users may add their own)
       - ./prompts:/app/prompts
+      # Templates (for development - live updates)
+      - ./templates:/app/templates
+      # Static files (for development - live updates)
+      - ./static:/app/static
+      # Main application (for development - live updates)
+      - ./app.py:/app/app.py
 
     environment:
       - PYTHONUNBUFFERED=1
@@ -133,6 +145,12 @@ services:
       - ./models:/app/models
       # Custom prompts (optional - users may add their own)
       - ./prompts:/app/prompts
+      # Templates (for development - live updates)
+      - ./templates:/app/templates
+      # Static files (for development - live updates)
+      - ./static:/app/static
+      # Main application (for development - live updates)
+      - ./app.py:/app/app.py
 
     environment:
       - PYTHONUNBUFFERED=1

@@ -1403,6 +1403,59 @@ async def get_recording_for_prompt(profile_name: str, prompt_list_id: str, promp
 
     return {"filename": None}
 
+# Delete a recording for a specific prompt
+@app.delete("/api/delete_recording/{profile_name}/{prompt_list_id}/{prompt_index}")
+async def delete_recording(profile_name: str, prompt_list_id: str, prompt_index: int):
+    """Delete a recording file and remove it from metadata"""
+    profile_dir = VOICES_DIR / profile_name
+    recordings_dir = profile_dir / "recordings"
+    metadata_file = profile_dir / "metadata.jsonl"
+
+    if not profile_dir.exists():
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    # Parse prompt list name
+    if prompt_list_id.startswith(f"{profile_name}_"):
+        prompt_name = prompt_list_id[len(profile_name) + 1:]
+    else:
+        prompt_name = prompt_list_id
+
+    deleted_filename = None
+    
+    # Find and delete the recording file
+    if metadata_file.exists() and recordings_dir.exists():
+        # Read all metadata
+        metadata_lines = []
+        with open(metadata_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        metadata = json.loads(line.strip())
+                        if (metadata.get("prompt_list") == prompt_name and
+                            metadata.get("prompt_index") == prompt_index):
+                            # Found the recording to delete
+                            filename = metadata.get("filename")
+                            if filename:
+                                file_path = recordings_dir / filename
+                                if file_path.exists():
+                                    file_path.unlink()  # Delete the file
+                                    deleted_filename = filename
+                            # Don't add this line to metadata_lines (effectively removing it)
+                            continue
+                        # Keep all other metadata entries
+                        metadata_lines.append(line)
+                    except json.JSONDecodeError:
+                        metadata_lines.append(line)  # Keep malformed lines
+        
+        # Write back the updated metadata (without the deleted recording)
+        with open(metadata_file, "w", encoding="utf-8") as f:
+            f.writelines(metadata_lines)
+    
+    if deleted_filename:
+        return {"success": True, "message": f"Recording {deleted_filename} deleted"}
+    else:
+        return {"success": False, "message": "Recording not found"}
+
 # Get all available prompt lists
 @app.get("/api/prompts")
 async def get_all_prompts():
