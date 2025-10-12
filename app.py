@@ -1878,7 +1878,11 @@ async def start_export(request: Request):
         data = await request.json()
 
         profile_id = data.get("profile_id")
-        prompt_list_id = data.get("prompt_list_id")
+        # Support both single prompt_list_id (legacy) and prompt_list_ids (new multi-select)
+        prompt_list_ids = data.get("prompt_list_ids", [])
+        if not prompt_list_ids and data.get("prompt_list_id"):
+            prompt_list_ids = [data.get("prompt_list_id")]
+
         format = data.get("format", "wav")
         sample_rate = data.get("sample_rate", 44100)
         bit_depth = data.get("bit_depth", 16)
@@ -1888,8 +1892,8 @@ async def start_export(request: Request):
         include_transcripts = data.get("include_transcripts", True)
         create_zip = data.get("create_zip", True)
 
-        if not profile_id or not prompt_list_id:
-            raise HTTPException(status_code=400, detail="profile_id and prompt_list_id are required")
+        if not profile_id or not prompt_list_ids:
+            raise HTTPException(status_code=400, detail="profile_id and prompt_list_ids are required")
 
         # Generate job ID
         import uuid
@@ -1899,7 +1903,7 @@ async def start_export(request: Request):
         export_jobs[job_id] = {
             "status": "running",
             "profile_id": profile_id,
-            "prompt_list_id": prompt_list_id,
+            "prompt_list_ids": prompt_list_ids,  # Changed to support multiple lists
             "format": format,
             "sample_rate": sample_rate,
             "bit_depth": bit_depth,
@@ -1917,7 +1921,6 @@ async def start_export(request: Request):
         }
 
         # Start export in background
-        import asyncio
         asyncio.create_task(export_audio_batch(job_id))
 
         return {"success": True, "job_id": job_id}
@@ -1931,14 +1934,16 @@ async def export_audio_batch(job_id: str):
         profile_dir = VOICES_DIR / job["profile_id"]
         recordings_dir = profile_dir / "recordings"
 
-        # Parse prompt list name
-        prompt_list_id = job["prompt_list_id"]
-        if prompt_list_id.startswith(f"{job['profile_id']}_"):
-            prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
-        else:
-            prompt_name = prompt_list_id
+        # Parse ALL prompt list names (same logic as postprocessing)
+        prompt_names = []
+        for prompt_list_id in job["prompt_list_ids"]:
+            if prompt_list_id.startswith(f"{job['profile_id']}_"):
+                prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
+            else:
+                prompt_name = prompt_list_id
+            prompt_names.append(prompt_name)
 
-        # Get files to export
+        # Get files to export from ALL selected prompt lists
         files_to_export = []
         metadata_entries = []
         metadata_file = profile_dir / "metadata.jsonl"
@@ -1948,20 +1953,28 @@ async def export_audio_batch(job_id: str):
                     if line.strip():
                         try:
                             metadata = json.loads(line.strip())
-                            if metadata.get("prompt_list") == prompt_name:
+                            # Check if this file belongs to ANY of the selected prompt lists
+                            if metadata.get("prompt_list") in prompt_names:
                                 filename = metadata.get("filename")
                                 if filename:
                                     file_path = recordings_dir / filename
                                     if file_path.exists():
                                         files_to_export.append(file_path)
-                                        metadata_entries.append(metadata)
+                                        metadata_entries.append(metadata)  # Preserves original metadata!
                         except json.JSONDecodeError:
                             continue
 
         job["total"] = len(files_to_export)
 
-        # Create export directory
-        export_dir = profile_dir / "exports" / f"{prompt_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Create export directory with combined name for multiple lists
+        if len(prompt_names) == 1:
+            combined_name = prompt_names[0]
+        elif len(prompt_names) <= 3:
+            combined_name = "_".join(prompt_names)
+        else:
+            combined_name = f"{prompt_names[0]}_{prompt_names[1]}_and_{len(prompt_names)-2}_more"
+
+        export_dir = profile_dir / "exports" / f"{combined_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         export_dir.mkdir(parents=True, exist_ok=True)
 
         # Process each file
@@ -2178,7 +2191,21 @@ async def start_training(
         raise HTTPException(status_code=500, detail=str(e))
 
 async def train_model_background(job_id: str):
-    """Train model in background (simulated)"""
+    """Train model in background (simulated)
+
+    NOTE: When implementing actual training, use job["prompt_list_ids"] to collect
+    audio files from multiple prompt lists (same logic as postprocessing and export):
+
+    prompt_names = []
+    for prompt_list_id in job["prompt_list_ids"]:
+        if prompt_list_id.startswith(f"{job['profile_id']}_"):
+            prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
+        else:
+            prompt_name = prompt_list_id
+        prompt_names.append(prompt_name)
+
+    # Then collect files: if metadata.get("prompt_list") in prompt_names
+    """
     try:
         job = training_jobs[job_id]
 
