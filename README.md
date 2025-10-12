@@ -1,6 +1,10 @@
-# Voice Dataset Manager
+# Voice Dataset Manager - Custom TTS Voice Training
 
-A comprehensive web application for managing voice datasets with recording, organization, and export capabilities for AI voice synthesis projects.
+A comprehensive web application for **creating custom voice models** for AI voice synthesis. Features recording, phoneme alignment, and Piper TTS model training.
+
+> **📋 Installation Options:** Choose your preferred setup. Standard installation provides full training capabilities. See [MFA_ESSENTIAL_README.md](MFA_ESSENTIAL_README.md) for optional MFA enhancements.
+
+> **🗑️ Uninstall:** Complete removal script available: `./uninstall.sh`
 
 > **🐳 Docker Users (Recommended):** See [DOCKER_README.md](DOCKER_README.md) - Includes GPU + MFA support with zero setup!
 

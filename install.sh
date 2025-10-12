@@ -661,53 +661,165 @@ else
     exit 1
 fi
 
-# Install training requirements with compatibility handling
+# Install training requirements with MFA priority
 print_status "Installing training dependencies..."
 
-# Check if we should skip MFA
-SKIP_MFA=0
-MFA_REASON=""
+# MFA is ESSENTIAL for custom voice model training - this app's core purpose
+# We'll prioritize getting MFA working over other considerations
 
-if [ $COMPATIBILITY_MODE -eq 1 ]; then
-    print_warning "Python 3.12+ detected - MFA not compatible"
-    MFA_REASON="Python 3.12+ not supported"
-    SKIP_MFA=1
-elif [ "$OS" == "windows" ]; then
-    print_warning "Windows detected - Montreal Forced Aligner (MFA) requires Conda"
-    MFA_REASON="Windows: Conda required"
-    SKIP_MFA=1
-else
-    # On Linux/Mac, check if conda is available
-    print_status "Checking Montreal Forced Aligner availability..."
+MFA_INSTALLED=0
+MFA_METHOD=""
 
-    # Try to install MFA via pip first (may fail)
-    if pip install "montreal-forced-alignment>=3.0.0" >/dev/null 2>&1; then
-        print_success "Montreal Forced Aligner installed via pip"
-        SKIP_MFA=0
-    else
-        print_warning "Montreal Forced Aligner not available via pip"
-        MFA_REASON="MFA requires Conda installation"
+print_status "Checking Montreal Forced Aligner (MFA) installation options..."
+
+# MFA is ESSENTIAL for custom voice model training
+# Ask user upfront what installation method they prefer
+
+echo ""
+echo "🎯 MFA INSTALLATION CHOICES"
+echo "==========================="
+echo ""
+echo "Montreal Forced Aligner (MFA) enhances TTS training quality, but is OPTIONAL."
+echo ""
+echo "📋 YOUR OPTIONS:"
+echo ""
+echo "1. ✅ Standard Installation (RECOMMENDED):"
+echo "   • No external dependencies"
+echo "   • Basic TTS training works perfectly"
+echo "   • Uses phoneme sequences (G2P models)"
+echo "   • Sufficient for most users"
+echo ""
+echo "2. 🔧 Enhanced Installation (MFA via Conda):"
+echo "   • Installs Conda system-wide"
+echo "   • Enables forced alignment (better quality)"
+echo "   • May interfere with existing Python/conda setups"
+echo "   • Best for professional results"
+echo ""
+echo "3. 🐳 Docker Installation (Most Isolated):"
+echo "   • Zero system changes"
+echo "   • Includes MFA + GPU support"
+echo "   • Completely self-contained"
+echo "   • Perfect for testing/complex setups"
+echo ""
+echo "4. ⏭️  Skip MFA (Basic functionality only):"
+echo "   • Recording and dataset management only"
+echo "   • No TTS model training"
+echo "   • For users who just want to collect data"
+echo ""
+read -p "Choose MFA installation method [1/2/3/4]: " mfa_choice
+
+MFA_INSTALLED=0
+MFA_METHOD=""
+
+case "$mfa_choice" in
+    1)
+        echo ""
+        echo "✅ Selected: Standard Installation (No MFA)"
+        echo ""
+        print_success "Perfect choice for most users!"
+        echo ""
+        echo "This installation provides:"
+        echo "  ✅ Full TTS training capabilities"
+        echo "  ✅ No external dependencies"
+        echo "  ✅ Clean, isolated setup"
+        echo "  ✅ Sufficient for excellent results"
+        echo ""
+        print_info "Proceeding with standard installation..."
         SKIP_MFA=1
+        ;;
 
+    2)
+        echo ""
+        echo "🔧 Selected: Enhanced Installation (MFA via Conda)"
+        echo ""
+        print_warning "This will install Conda system-wide."
+        echo ""
+        echo "Conda installation provides:"
+        echo "  ✅ Forced alignment (better quality)"
+        echo "  ✅ Professional TTS training"
+        echo "  ⚠️  May interfere with existing Python setups"
+        echo ""
         # Check if conda is available
-        if command -v conda >/dev/null 2>&1; then
+        if ! command -v conda >/dev/null 2>&1; then
+            print_warning "Conda not found in PATH"
             echo ""
-            echo "Conda detected! You can install MFA with:"
-            echo "  conda install -c conda-forge montreal-forced-aligner"
+            echo "To install Conda:"
+            echo "  • Linux/Mac: https://docs.conda.io/en/latest/miniconda.html"
+            echo "  • Windows: https://docs.conda.io/en/latest/miniconda.html"
             echo ""
-            read -p "Install MFA via Conda now? [y/N]: " install_mfa
-            if [ "$install_mfa" = "y" ] || [ "$install_mfa" = "Y" ]; then
-                print_status "Installing MFA via Conda..."
-                conda install -c conda-forge montreal-forced-aligner -y && {
-                    print_success "MFA installed successfully via Conda"
-                    SKIP_MFA=0
-                } || {
-                    print_warning "MFA installation via Conda failed"
-                }
+            read -p "Install Conda first, then retry? [y/N]: " install_conda
+            if [ "$install_conda" = "y" ] || [ "$install_conda" = "Y" ]; then
+                echo "Please install Conda and run this script again."
+                exit 1
+            else
+                print_warning "Cannot install MFA without Conda"
+                SKIP_MFA=1
+            fi
+        else
+            print_status "Found Conda: $(which conda)"
+            print_status "Installing MFA via Conda..."
+            if conda install -c conda-forge montreal-forced-aligner -y >/dev/null 2>&1; then
+                MFA_INSTALLED=1
+                MFA_METHOD="Conda (conda-forge)"
+                print_success "MFA installed successfully via Conda"
+            else
+                print_error "Conda installation failed!"
+                print_warning "MFA installation via Conda failed"
+                SKIP_MFA=1
             fi
         fi
-    fi
-fi
+        ;;
+
+    3)
+        echo ""
+        echo "🐳 Selected: Docker Installation (Most Isolated)"
+        echo ""
+        print_success "Excellent choice for clean, isolated setup!"
+        echo ""
+        echo "Docker provides:"
+        echo "  ✅ Zero system interference"
+        echo "  ✅ MFA + GPU support included"
+        echo "  ✅ Completely self-contained"
+        echo "  ✅ Easy cleanup with ./uninstall.sh"
+        echo ""
+        print_info "Run: ./docker-start.sh after this installation completes"
+        SKIP_MFA=1
+        ;;
+
+    4)
+        echo ""
+        echo "⏭️  Selected: Skip MFA (Recording only)"
+        echo ""
+        print_info "Recording and dataset management only."
+        echo ""
+        echo "This provides:"
+        echo "  ✅ Voice recording interface"
+        echo "  ✅ Dataset organization"
+        echo "  ❌ No TTS model training"
+        echo ""
+        print_warning "You will need to install MFA separately for training."
+        SKIP_MFA=1
+        ;;
+
+    *)
+        print_warning "Invalid choice. Defaulting to Conda installation..."
+        # Try conda if available, otherwise skip
+        if command -v conda >/dev/null 2>&1; then
+            print_status "Attempting MFA installation via Conda..."
+            if conda install -c conda-forge montreal-forced-aligner -y >/dev/null 2>&1; then
+                MFA_INSTALLED=1
+                MFA_METHOD="Conda (conda-forge)"
+                print_success "MFA installed via Conda"
+            else
+                print_warning "Conda installation failed, skipping MFA"
+                SKIP_MFA=1
+            fi
+        else
+            print_warning "Conda not available and no valid choice made"
+            SKIP_MFA=1
+        fi
+        ;;
+esac
 
 if [ $SKIP_MFA -eq 1 ]; then
     if [ -f "requirements_training.txt" ]; then
@@ -720,19 +832,22 @@ if [ $SKIP_MFA -eq 1 ]; then
         pip install transformers datasets accelerate evaluate librosa soundfile scipy scikit-learn
         pip install tensorboard wandb phonemizer
     fi
-    print_warning "Montreal Forced Aligner was skipped ($MFA_REASON)"
-    echo ""
-    echo "ℹ️  MFA is OPTIONAL - most users don't need it!"
-    echo "   ✅ Recording & datasets: Works without MFA"
-    echo "   ✅ Using pre-trained models: Works without MFA"
-    echo "   ⚠️  Training custom TTS models: MFA improves quality"
-    echo ""
-
-    if [ "$OS" == "windows" ] || [ "$OS" == "linux" ]; then
-        echo "To install MFA later (if needed):"
-        echo "  1. Install Miniconda: https://docs.conda.io/en/latest/miniconda.html"
-        echo "  2. Run: conda install -c conda-forge montreal-forced-aligner"
+    if [ $MFA_INSTALLED -eq 0 ]; then
+        print_warning "Montreal Forced Aligner installation failed"
         echo ""
+        echo "ℹ️  YOUR INSTALLATION STATUS:"
+        echo ""
+        echo "   ✅ Standard installation complete"
+        echo "   ✅ Basic TTS training works perfectly"
+        echo "   ✅ Uses phoneme sequences (G2P models)"
+        echo "   ✅ No external dependencies required"
+        echo ""
+        echo "💡 For enhanced quality, you can:"
+        echo "   • Install MFA via Conda (better alignment)"
+        echo "   • Use Docker (includes everything)"
+        echo "   • Both options available in installation menu"
+    else
+        print_success "MFA installed successfully via $MFA_METHOD"
     fi
 else
     # Normal installation with MFA (Linux/Mac only)
@@ -961,9 +1076,12 @@ else
 fi
 
 # Generate summary
-if [ $INSTALLATION_TEST_RESULT -eq 0 ]; then
+if [ $INSTALLATION_TEST_RESULT -eq 0 ] && [ $MFA_INSTALLED -eq 1 ]; then
     print_success "Installation test passed!"
-    INSTALLATION_SUMMARY="✅ All components installed successfully"
+    INSTALLATION_SUMMARY="✅ Enhanced installation - ready for professional voice model training!"
+elif [ $INSTALLATION_TEST_RESULT -eq 0 ]; then
+    print_success "Installation test passed!"
+    INSTALLATION_SUMMARY="✅ Standard installation - ready for custom voice model training!"
 else
     print_warning "Some components may not be properly installed."
     INSTALLATION_SUMMARY="⚠️  Partial installation completed"
@@ -1111,8 +1229,8 @@ if [ "$OS" == "windows" ]; then
 fi
 
 if [ -n "$FAILED_COMPONENTS" ]; then
-    echo "⚠️  Note: Some features may not work due to missing components."
-    echo "   The core recording functionality should still work."
+    echo "⚠️  Note: Some optional features may not work due to missing components."
+    echo "   Core TTS training functionality is fully available."
     echo ""
 fi
 

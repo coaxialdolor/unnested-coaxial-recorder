@@ -1,7 +1,10 @@
 # Coaxial Recorder Training Guide
 
 ## Overview
-This installation includes full Piper TTS training capabilities. You can train custom voice models from your recorded data.
+
+This installation enables **custom voice model training** for AI voice synthesis. You can train Piper TTS models from your recorded voice data.
+
+**MFA Status**: Montreal Forced Aligner provides enhanced training quality but is optional for basic training.
 
 ## Quick Start
 
@@ -17,6 +20,20 @@ This installation includes full Piper TTS training capabilities. You can train c
 - **GPU acceleration**: Automatic CUDA detection and usage
 - **Mixed precision**: Faster training with lower memory usage
 - **Real-time monitoring**: Watch training progress and console output
+
+## Training Options
+
+### ✅ With MFA (Best Quality)
+- **Forced alignment**: Precise audio-text timing
+- **Phoneme-level accuracy**: Better TTS model training
+- **Professional results**: High-quality voice synthesis
+
+### ✅ Without MFA (Basic Training)
+- **Phoneme sequences**: Uses G2P models (espeak-ng)
+- **Functional TTS**: Basic voice synthesis training
+- **Good for experimentation**: Learn and iterate quickly
+
+**Both options work!** MFA improves quality but isn't required for training.
 
 ## Command Line Training
 
