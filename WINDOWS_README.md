@@ -71,13 +71,16 @@ If you don't have Python:
 
 ## Python Version Compatibility
 
-| Python | GPU Support | MFA Support | Recommended |
-|--------|-------------|-------------|-------------|
-| 3.10 | ✅ | ✅ | **Best** |
-| 3.11 | ✅ | ✅ | Good |
-| 3.12 | ✅ | ❌ | Limited |
+| Python | GPU Support | MFA Support (Windows) | Recommended |
+|--------|-------------|----------------------|-------------|
+| 3.10 | ✅ | ⚠️ Conda only | **Best** |
+| 3.11 | ✅ | ⚠️ Conda only | Good |
+| 3.12 | ✅ | ❌ Not available | Good |
 
-**Recommendation:** Use Python 3.10 for best compatibility.
+**Windows Note:** Montreal Forced Aligner (MFA) doesn't have pip wheels for Windows.
+- **MFA is optional** - the app works fine without it
+- If you need MFA, install via Conda: `conda install -c conda-forge montreal-forced-aligner`
+- For most users: **Python 3.10 or 3.12 work great without MFA**
 
 The installer can download Python 3.10 locally if you have 3.12.
 
@@ -98,7 +101,7 @@ No manual configuration needed!
 **Solution:** Install Git for Windows (includes Git Bash)
 
 ### "Python not found"
-**Problem:** Python not in PATH
+**Problem:** Python not in PATHb
 **Solutions:**
 1. Reinstall Python and check "Add Python to PATH"
 2. Or manually add Python to PATH:
@@ -169,6 +172,36 @@ No manual configuration needed!
 
 ### Issue: Slow download speeds
 **Solution:** The installer downloads large files (PyTorch ~2GB). Be patient.
+
+## About Montreal Forced Aligner (MFA)
+
+**What is MFA?**
+- Montreal Forced Aligner is a tool for phoneme alignment
+- Used in advanced TTS training pipelines
+- **Optional for most users**
+
+**Do you need it?**
+- ❌ **Basic recording & dataset creation** - No, not needed
+- ❌ **Using pre-trained Piper models** - No, not needed
+- ✅ **Training custom Piper TTS models** - Yes, improves quality
+- ✅ **Advanced phoneme-level control** - Yes, required
+
+**Windows Installation:**
+MFA doesn't work with pip on Windows. If you need it:
+
+1. Install Miniconda:
+   ```bash
+   # Download from: https://docs.conda.io/en/latest/miniconda.html
+   ```
+
+2. Install MFA via Conda:
+   ```bash
+   conda install -c conda-forge montreal-forced-aligner
+   ```
+
+3. Use MFA separately from your venv
+
+**Bottom line:** Most Windows users don't need MFA. The installer skips it automatically.
 
 ## What Gets Installed
 

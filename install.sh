@@ -664,23 +664,78 @@ fi
 # Install training requirements with compatibility handling
 print_status "Installing training dependencies..."
 
-if [ $COMPATIBILITY_MODE -eq 1 ]; then
-    print_warning "Applying Python 3.12+ compatibility fixes..."
+# Check if we should skip MFA
+SKIP_MFA=0
+MFA_REASON=""
 
+if [ $COMPATIBILITY_MODE -eq 1 ]; then
+    print_warning "Python 3.12+ detected - MFA not compatible"
+    MFA_REASON="Python 3.12+ not supported"
+    SKIP_MFA=1
+elif [ "$OS" == "windows" ]; then
+    print_warning "Windows detected - Montreal Forced Aligner (MFA) requires Conda"
+    MFA_REASON="Windows: Conda required"
+    SKIP_MFA=1
+else
+    # On Linux/Mac, check if conda is available
+    print_status "Checking Montreal Forced Aligner availability..."
+
+    # Try to install MFA via pip first (may fail)
+    if pip install "montreal-forced-alignment>=3.0.0" >/dev/null 2>&1; then
+        print_success "Montreal Forced Aligner installed via pip"
+        SKIP_MFA=0
+    else
+        print_warning "Montreal Forced Aligner not available via pip"
+        MFA_REASON="MFA requires Conda installation"
+        SKIP_MFA=1
+
+        # Check if conda is available
+        if command -v conda >/dev/null 2>&1; then
+            echo ""
+            echo "Conda detected! You can install MFA with:"
+            echo "  conda install -c conda-forge montreal-forced-aligner"
+            echo ""
+            read -p "Install MFA via Conda now? [y/N]: " install_mfa
+            if [ "$install_mfa" = "y" ] || [ "$install_mfa" = "Y" ]; then
+                print_status "Installing MFA via Conda..."
+                conda install -c conda-forge montreal-forced-aligner -y && {
+                    print_success "MFA installed successfully via Conda"
+                    SKIP_MFA=0
+                } || {
+                    print_warning "MFA installation via Conda failed"
+                }
+            fi
+        fi
+    fi
+fi
+
+if [ $SKIP_MFA -eq 1 ]; then
     if [ -f "requirements_training.txt" ]; then
-        # Create compatible requirements file
-        grep -v "montreal-forced-alignment" requirements_training.txt | \
-        sed 's/^phonemizer$/phonemizer==3.3.0/' > requirements_training_compatible.txt
+        # Create compatible requirements file without MFA
+        grep -v "montreal-forced-alignment" requirements_training.txt > requirements_training_compatible.txt
         pip install -r requirements_training_compatible.txt
         rm -f requirements_training_compatible.txt
     else
-        # Install compatible versions individually
+        # Install packages individually without MFA
         pip install transformers datasets accelerate evaluate librosa soundfile scipy scikit-learn
-        pip install tensorboard wandb phonemizer==3.3.0
-        print_warning "Skipped montreal-forced-alignment (not compatible with Python 3.12+)"
+        pip install tensorboard wandb phonemizer
+    fi
+    print_warning "Montreal Forced Aligner was skipped ($MFA_REASON)"
+    echo ""
+    echo "ℹ️  MFA is OPTIONAL - most users don't need it!"
+    echo "   ✅ Recording & datasets: Works without MFA"
+    echo "   ✅ Using pre-trained models: Works without MFA"
+    echo "   ⚠️  Training custom TTS models: MFA improves quality"
+    echo ""
+
+    if [ "$OS" == "windows" ] || [ "$OS" == "linux" ]; then
+        echo "To install MFA later (if needed):"
+        echo "  1. Install Miniconda: https://docs.conda.io/en/latest/miniconda.html"
+        echo "  2. Run: conda install -c conda-forge montreal-forced-aligner"
+        echo ""
     fi
 else
-    # Normal installation for Python 3.11 and below
+    # Normal installation with MFA (Linux/Mac only)
     if [ -f "requirements_training.txt" ]; then
         pip install -r requirements_training.txt
     else
