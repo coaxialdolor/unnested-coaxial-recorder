@@ -1251,3 +1251,49 @@ if [ -n "$FAILED_COMPONENTS" ]; then
 fi
 
 print_success "Happy voice training! 🎤🤖"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "                    🎯 GETTING STARTED"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "1️⃣  Launch the application:"
+echo ""
+if [ "$OS" == "windows" ]; then
+    echo "   Option A - Double-click:"
+    echo "   📂 launch_complete.bat"
+    echo ""
+    echo "   Option B - Command line (Git Bash):"
+    echo "   bash launch_complete.sh"
+elif [ "$OS" == "macos" ]; then
+    echo "   ./launch_complete.sh"
+    echo ""
+    echo "   Or double-click: launch_complete.sh in Finder"
+else
+    echo "   ./launch_complete.sh"
+fi
+echo ""
+echo "2️⃣  Open your browser:"
+echo ""
+echo "   🌐 http://localhost:8000"
+echo ""
+echo "3️⃣  Start creating your custom voice:"
+echo ""
+echo "   • Create a voice profile"
+echo "   • Add prompt lists"
+echo "   • Record your voice samples"
+echo "   • Train your custom TTS model"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "📚 Documentation:"
+echo "   • TRAINING_README.md - Training guide"
+echo "   • SETUP_GUIDE.md - Quick setup reference"
+if [ "$OS" == "windows" ]; then
+    echo "   • WINDOWS_README.md - Windows-specific info"
+fi
+echo "   • MFA_ESSENTIAL_README.md - Optional MFA enhancement"
+echo ""
+echo "💡 Need help? Check the documentation or run:"
+echo "   venv/bin/python test_installation.py"
+echo ""
