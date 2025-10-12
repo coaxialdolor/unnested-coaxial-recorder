@@ -295,14 +295,14 @@ async def record_page(request: Request, profile_name: str, prompt_list: str):
 
 # API routes for recording
 @app.post("/api/profiles/{profile_name}/record")
-async def save_recording(
+async def save_recording_legacy(
     profile_name: str,
     prompt_list: str = Form(...),
     sentence_index: int = Form(...),
     sentence: str = Form(...),
     audio_file: UploadFile = File(...)
 ):
-    """Save a recorded audio clip"""
+    """Save a recorded audio clip (legacy endpoint)"""
     profile_dir = VOICES_DIR / profile_name
 
     if not profile_dir.exists():
@@ -511,7 +511,7 @@ async def get_voice_profile(profile_name: str):
 
 # Prompt lists endpoint
 @app.get("/api/prompt-lists/{prompt_list}")
-async def get_prompt_list(prompt_list: str):
+async def get_prompt_list_details(prompt_list: str):
     """Get prompt list details"""
     # Find the prompt list in any profile
     prompts = []
@@ -1441,10 +1441,10 @@ async def create_prompt_list(prompt_data: dict):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# Delete a prompt list
+# Delete a prompt list by ID
 @app.delete("/api/prompts/{prompt_id}")
-async def delete_prompt_list(prompt_id: str):
-    """Delete a prompt list"""
+async def delete_prompt_list_by_id(prompt_id: str):
+    """Delete a prompt list by ID"""
     try:
         # Parse prompt_id to get profile and prompt name
         parts = prompt_id.split("_", 1)
@@ -1506,8 +1506,8 @@ async def get_prompt_sources():
 
 # Export routes
 @app.get("/export/{profile_name}", response_class=HTMLResponse)
-async def export_page(request: Request, profile_name: str):
-    """Render the export page"""
+async def export_page_for_profile(request: Request, profile_name: str):
+    """Render the export page for a specific profile"""
     profile_dir = VOICES_DIR / profile_name
 
     if not profile_dir.exists():
@@ -2268,7 +2268,7 @@ async def stop_training(job_id: str):
 # Phoneme and Language Support API Endpoints
 
 @app.get("/api/languages")
-async def get_supported_languages():
+async def api_get_supported_languages():
     """Get list of all supported languages with phoneme information"""
     if not PHONEME_SUPPORT:
         return {"error": "Phoneme support not available"}
@@ -2787,7 +2787,7 @@ def create_test_audio_fallback(text: str, output_path: Path, speech_rate: float 
 
         # Apply rate and pitch adjustments (simplified)
         if speech_rate != 1.0:
-            tone = tone.speedup(playback_speed=speech_rate)
+            tone = tone.speedup(playback_speed=speech_rate)  # pylint: disable=no-member
 
         # Export as WAV
         tone.export(output_path, format="wav")
