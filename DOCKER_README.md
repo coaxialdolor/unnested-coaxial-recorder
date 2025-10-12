@@ -6,21 +6,21 @@ This Docker setup provides a **completely self-contained** environment with:
 - ✅ NVIDIA GPU support (CUDA 12.1) - `Dockerfile.gpu`
 - ✅ Apple Silicon ARM64 support (M1/M2/M3) - `Dockerfile.arm64` ⭐ NEW
 - ✅ CPU-only x86_64 support - `Dockerfile.cpu`
-- ✅ Montreal Forced Aligner (MFA) via Conda
+- ✅ Montreal Forced Aligner (MFA) via Conda (GPU/CPU only, not ARM64)
 - ✅ All dependencies pre-installed
-- ✅ No need to install Conda on host system
+- ✅ No need to install Conda on host system (except ARM64)
 - ✅ Works on Linux, Windows, and macOS
 
 ## Which Docker Image Should I Use?
 
-| Your System | Recommended Image | Command | Performance |
-|-------------|-------------------|---------|-------------|
-| **NVIDIA GPU** (RTX 30/40/50-series) | `Dockerfile.gpu` | `--profile gpu` | ⚡ Fastest (GPU-accelerated) |
-| **Apple Silicon** (M1/M2/M3 Mac) | `Dockerfile.arm64` | `--profile arm64` | ✅ Good (ARM64-optimized) |
-| **Intel/AMD CPU** (No GPU) | `Dockerfile.cpu` | `--profile cpu` | ⚠️ Slower (CPU-only) |
-| **Apple Silicon** (Best performance) | Native install | `bash install.sh` | ⚡⚡ Fastest (MPS support) |
+| Your System | Recommended Image | Command | Performance | MFA Support |
+|-------------|-------------------|---------|-------------|-------------|
+| **NVIDIA GPU** (RTX 30/40/50-series) | `Dockerfile.gpu` | `--profile gpu` | ⚡ Fastest (GPU-accelerated) | ✅ Yes (Conda) |
+| **Apple Silicon** (M1/M2/M3 Mac) | `Dockerfile.arm64` | `--profile arm64` | ✅ Good (ARM64-optimized) | ❌ No (pip only) |
+| **Intel/AMD CPU** (No GPU) | `Dockerfile.cpu` | `--profile cpu` | ⚠️ Slower (CPU-only) | ✅ Yes (Conda) |
+| **Apple Silicon** (Best performance) | Native install | `bash install.sh` | ⚡⚡ Fastest (MPS support) | ✅ Yes (optional) |
 
-**Recommendation for M1/M2/M3 Macs**: Use **native installation** (`bash install.sh`) for best performance, as it can leverage Metal Performance Shaders (MPS). Use Docker ARM64 only if you need isolation.
+**Recommendation for M1/M2/M3 Macs**: Use **native installation** (`bash install.sh`) for best performance and MFA support. Docker ARM64 provides basic functionality but lacks MFA/Conda due to compatibility issues.
 
 ## Quick Start
 
@@ -65,7 +65,7 @@ docker-compose logs -f coaxial-arm64
 # Open browser to http://localhost:8000
 ```
 
-**Note**: This version is optimized for Apple Silicon and includes MFA support. While it runs CPU-only in Docker, it's ARM64-native for better performance on M-series Macs.
+**Note**: This version is optimized for Apple Silicon but **does NOT include MFA or Conda** (they don't work reliably on ARM64). It uses pure pip-based installation for maximum compatibility. For MFA support on Apple Silicon, use native installation with `bash install.sh` instead.
 
 ### Option 3: CPU Version (For x86_64 Systems without GPU)
 
@@ -352,8 +352,9 @@ docker run --user $(id -u):$(id -g) ...
 
 | Setup | MFA Support | GPU Training | Installation Time | Disk Space |
 |-------|-------------|--------------|-------------------|------------|
-| **Docker GPU** | ✅ Yes | ✅ Fast | 10-15 min | ~8 GB |
-| **Docker CPU** | ✅ Yes | ⚠️ Slow | 5-10 min | ~4 GB |
+| **Docker GPU** | ✅ Yes (Conda) | ✅ Fast | 10-15 min | ~8 GB |
+| **Docker CPU** | ✅ Yes (Conda) | ⚠️ Slow | 5-10 min | ~4 GB |
+| **Docker ARM64** | ❌ No | ⚠️ Slow | 5-10 min | ~3 GB |
 | **Local pip** | ❌ No (Windows/Ubuntu) | ✅ Fast | 5-15 min | ~3 GB |
 | **Local Conda** | ✅ Yes | ✅ Fast | 15-20 min | ~5 GB |
 
@@ -490,12 +491,14 @@ docker system prune -a                          # Clean up
 
 ✅ **Working out of the box:**
 - Python 3.10
-- PyTorch with CUDA 12.1 (GPU) or CPU
-- Montreal Forced Aligner via Conda
+- PyTorch with CUDA 12.1 (GPU), CPU, or ARM64
+- Montreal Forced Aligner via Conda (GPU/CPU only)
 - All dependencies
-- MFA English models pre-downloaded
-- GPU support (NVIDIA)
+- MFA English models pre-downloaded (GPU/CPU only)
+- GPU support (NVIDIA for GPU build)
 - Persistent data storage
+
+**Note:** ARM64 Docker image does NOT include MFA/Conda due to compatibility issues. Use native installation for MFA on Apple Silicon.
 
 **No manual installation needed!** 🎉
 

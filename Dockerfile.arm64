@@ -1,12 +1,12 @@
 # Multi-stage build for Coaxial Recorder on Apple Silicon (M1/M2/M3)
 # Optimized for ARM64 architecture with Metal Performance Shaders support
+# No Conda, no MFA — pure pip-based environment
 
 # Stage 1: Base with Python 3.10
 FROM python:3.10-slim-bookworm AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
-ENV CONDA_DIR=/opt/conda
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -21,15 +21,6 @@ RUN apt-get update && apt-get install -y \
     portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Miniforge (ARM64-native, avoids Anaconda TOS issues)
-RUN wget --quiet https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -O ~/miniforge.sh && \
-    /bin/bash ~/miniforge.sh -b -p $CONDA_DIR && \
-    rm ~/miniforge.sh && \
-    $CONDA_DIR/bin/conda clean -a -y
-
-# Add conda to path
-ENV PATH=$CONDA_DIR/bin:$PATH
-
 # Stage 2: Python environment
 FROM base AS builder
 
@@ -38,43 +29,31 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt requirements_training.txt requirements_export.txt ./
 
-# Create conda environment with Python 3.10 from conda-forge
-RUN conda create -n coaxial python=3.10 -c conda-forge -y && \
-    echo "source activate coaxial" > ~/.bashrc
-
-# Activate environment and install packages
-SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
-
 # Upgrade pip
 RUN pip install --upgrade pip
 
-# Install PyTorch for ARM64 (CPU-only, but optimized for Apple Silicon when run natively)
+# Install PyTorch for ARM64 (CPU-only, optimized for Apple Silicon)
 RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-
-# Install Montreal Forced Aligner via conda (ARM64 compatible)
-RUN conda install -c conda-forge montreal-forced-aligner -y
 
 # Install core requirements
 RUN pip install -r requirements.txt
 
-# Install training requirements (excluding MFA since we installed via conda)
-RUN grep -v "montreal-forced-alignment" requirements_training.txt | \
+# Install training requirements (excluding MFA and comments)
+RUN grep -vE "montreal-forced-align(er|ment)" requirements_training.txt | \
+    grep -vE '^\s*#' | \
     xargs -r pip install
 
 # Install export requirements
 RUN pip install -r requirements_export.txt
-
-# Download MFA models (optional but useful)
-RUN mfa model download acoustic english_us_arpa || true
-RUN mfa model download dictionary english_us_arpa || true
 
 # Stage 3: Final runtime image
 FROM base
 
 WORKDIR /app
 
-# Copy conda environment from builder
-COPY --from=builder $CONDA_DIR $CONDA_DIR
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY . .
@@ -85,12 +64,9 @@ RUN mkdir -p voices output logs checkpoints
 # Expose port for web interface
 EXPOSE 8000
 
-# Set up conda activation
-SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Default command
-CMD ["conda", "run", "--no-capture-output", "-n", "coaxial", "python", "app.py"]
+CMD ["python", "app.py"]

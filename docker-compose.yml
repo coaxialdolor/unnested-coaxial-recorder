@@ -22,10 +22,24 @@ services:
       - "8000:8000"
 
     volumes:
+      # User data - recordings, voice profiles, metadata
       - ./voices:/app/voices
+      # Training output - final models, exported datasets
       - ./output:/app/output
+      # Pre-trained models and checkpoints
       - ./checkpoints:/app/checkpoints
+      # Application logs
       - ./logs:/app/logs
+      # Training checkpoints (intermediate saves)
+      - ./training/checkpoints:/app/training/checkpoints
+      # Training logs (TensorBoard, metrics)
+      - ./training/logs:/app/training/logs
+      # Converted models
+      - ./converted_models:/app/converted_models
+      # Model cache
+      - ./models:/app/models
+      # Custom prompts (optional - users may add their own)
+      - ./prompts:/app/prompts
 
     environment:
       - CUDA_VISIBLE_DEVICES=0
@@ -55,10 +69,24 @@ services:
       - "8000:8000"
 
     volumes:
+      # User data - recordings, voice profiles, metadata
       - ./voices:/app/voices
+      # Training output - final models, exported datasets
       - ./output:/app/output
+      # Pre-trained models and checkpoints
       - ./checkpoints:/app/checkpoints
+      # Application logs
       - ./logs:/app/logs
+      # Training checkpoints (intermediate saves)
+      - ./training/checkpoints:/app/training/checkpoints
+      # Training logs (TensorBoard, metrics)
+      - ./training/logs:/app/training/logs
+      # Converted models
+      - ./converted_models:/app/converted_models
+      # Model cache
+      - ./models:/app/models
+      # Custom prompts (optional - users may add their own)
+      - ./prompts:/app/prompts
 
     environment:
       - PYTHONUNBUFFERED=1
@@ -75,6 +103,7 @@ services:
       - cpu
 
   # ARM64 version (Apple Silicon M1/M2/M3 Macs)
+  # Note: No MFA/Conda support - use native installation for MFA
   coaxial-arm64:
     build:
       context: .
@@ -88,10 +117,24 @@ services:
       - "8000:8000"
 
     volumes:
+      # User data - recordings, voice profiles, metadata
       - ./voices:/app/voices
+      # Training output - final models, exported datasets
       - ./output:/app/output
+      # Pre-trained models and checkpoints
       - ./checkpoints:/app/checkpoints
+      # Application logs
       - ./logs:/app/logs
+      # Training checkpoints (intermediate saves)
+      - ./training/checkpoints:/app/training/checkpoints
+      # Training logs (TensorBoard, metrics)
+      - ./training/logs:/app/training/logs
+      # Converted models
+      - ./converted_models:/app/converted_models
+      # Model cache
+      - ./models:/app/models
+      # Custom prompts (optional - users may add their own)
+      - ./prompts:/app/prompts
 
     environment:
       - PYTHONUNBUFFERED=1

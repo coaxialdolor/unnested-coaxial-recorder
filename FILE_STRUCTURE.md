@@ -28,7 +28,7 @@ Complete guide to the repository structure and what each file does.
 |------|---------|--------------|-------------|
 | **Dockerfile.gpu** | NVIDIA GPU-enabled image with CUDA 12.1 + Conda + MFA | x86_64 | ✅ NVIDIA CUDA |
 | **Dockerfile.cpu** | CPU-only image with Conda + MFA | x86_64 | ❌ CPU-only |
-| **Dockerfile.arm64** | Apple Silicon optimized image with Conda + MFA | ARM64 | ❌ CPU-only (ARM64-optimized) |
+| **Dockerfile.arm64** | Apple Silicon optimized image (pip-only, NO Conda/MFA) | ARM64 | ❌ CPU-only (ARM64-optimized) |
 | **docker-compose.yml** | Orchestrates all three Docker images with profiles | All | Depends on profile |
 | **docker-start.sh** | Convenience script to detect GPU and start appropriate container | All | Auto-detects |
 | **.dockerignore** | Excludes unnecessary files from Docker builds (venv, cache, etc.) | N/A | N/A |
