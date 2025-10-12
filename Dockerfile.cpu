@@ -31,8 +31,10 @@ ENV PATH=$CONDA_DIR/bin:$PATH
 
 # Accept conda Terms of Service for non-interactive usage
 RUN conda config --set always_yes yes && \
-    conda config --add channels conda-forge && \
-    conda update conda -y
+    echo "channels:" > ~/.condarc && \
+    echo "  - conda-forge" >> ~/.condarc && \
+    echo "  - defaults" >> ~/.condarc && \
+    echo "channel_priority: flexible" >> ~/.condarc
 
 # Stage 2: Python environment
 FROM base as builder
