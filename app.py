@@ -1174,6 +1174,7 @@ async def open_recordings_folder(profile_name: str):
     try:
         import subprocess
         import platform
+        import shutil
 
         system = platform.system()
         if system == "Windows":
@@ -1181,7 +1182,16 @@ async def open_recordings_folder(profile_name: str):
         elif system == "Darwin":  # macOS
             subprocess.Popen(["open", str(recordings_dir)])
         else:  # Linux
-            subprocess.Popen(["xdg-open", str(recordings_dir)])
+            # Check if xdg-open exists (not available in Docker)
+            if shutil.which("xdg-open"):
+                subprocess.Popen(["xdg-open", str(recordings_dir)])
+            else:
+                # Return the path for Docker/containers
+                return {
+                    "success": True, 
+                    "message": "Running in container - folder available at host path",
+                    "path": str(recordings_dir)
+                }
 
         return {"success": True}
     except Exception as e:
@@ -1244,8 +1254,25 @@ async def save_recording(
 
         # Save the audio file
         contents = await audio.read()
-        with open(file_path, 'wb') as f:
+        
+        # Save raw file first
+        temp_path = file_path.with_suffix('.tmp')
+        with open(temp_path, 'wb') as f:
             f.write(contents)
+        
+        # Try to convert to proper WAV format immediately
+        try:
+            from pydub import AudioSegment
+            # Load audio (handles webm, mp4, etc.)
+            audio_segment = AudioSegment.from_file(temp_path)
+            # Export as proper WAV
+            audio_segment.export(file_path, format="wav")
+            # Remove temp file
+            temp_path.unlink()
+        except Exception as conv_error:
+            # If conversion fails, just use the raw file
+            print(f"Could not convert to WAV on upload: {conv_error}")
+            temp_path.rename(file_path)
 
         # Update metadata
         metadata_file = profile_dir / "metadata.jsonl"

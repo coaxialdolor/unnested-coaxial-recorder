@@ -512,13 +512,14 @@
         async function startRecording() {
             try {
                 // Request audio with 44kHz sample rate
+                // autoGainControl disabled to prevent over-amplification
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         sampleRate: 44100,
                         channelCount: 1,
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: false  // Disabled to match Audacity levels
                     }
                 });
 
@@ -761,9 +762,10 @@
                 levelBar.style.width = percentage + '%';
 
                 // Check for clipping (values near maximum)
-                const clippingThreshold = 120; // Adjusted for time domain data (0-128 range, 120 = 94% of max)
+                // Use 127 (99.2% of max 128) to only warn on actual clipping, not just loud audio
+                const clippingThreshold = 127; // Time domain data (0-128 range, 127 = 99.2% of max)
                 const wasClipping = isClipping;
-                isClipping = max > clippingThreshold;
+                isClipping = max >= clippingThreshold;
 
                 if (isClipping && !wasClipping) {
                     clippingCount++;
@@ -918,7 +920,11 @@
                 .then(data => {
                     if (!data.success) {
                         alert('Error opening folder: ' + data.error);
+                    } else if (data.path) {
+                        // Running in Docker - show the path
+                        alert(`Recordings folder (inside container):\n${data.path}\n\nOn your host machine, check:\nC:\\Users\\Petter\\Desktop\\coaxial-recorder\\voices\\${currentProfileId}\\recordings`);
                     }
+                    // If success without path, folder opened successfully
                 })
                 .catch(error => {
                     console.error('Error opening folder:', error);
