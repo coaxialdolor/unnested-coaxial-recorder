@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # GPU-enabled version (RTX 5060 Ti, 4090, 3090, etc.)
   coaxial-gpu:
