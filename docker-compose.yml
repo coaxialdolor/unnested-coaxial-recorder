@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # GPU-enabled version (RTX 5060 Ti, 4090, 3090, etc.)
+  coaxial-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    image: coaxial-recorder:gpu
+    container_name: coaxial-recorder-gpu
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./voices:/app/voices
+      - ./output:/app/output
+      - ./checkpoints:/app/checkpoints
+      - ./logs:/app/logs
+
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
+      - TZ=UTC
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    profiles:
+      - gpu
+
+  # CPU-only version (no GPU required)
+  coaxial-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: coaxial-recorder:cpu
+    container_name: coaxial-recorder-cpu
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./voices:/app/voices
+      - ./output:/app/output
+      - ./checkpoints:/app/checkpoints
+      - ./logs:/app/logs
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=UTC
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    profiles:
+      - cpu
+
+  # ARM64 version (Apple Silicon M1/M2/M3 Macs)
+  coaxial-arm64:
+    build:
+      context: .
+      dockerfile: Dockerfile.arm64
+    image: coaxial-recorder:arm64
+    container_name: coaxial-recorder-arm64
+    restart: unless-stopped
+    platform: linux/arm64
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./voices:/app/voices
+      - ./output:/app/output
+      - ./checkpoints:/app/checkpoints
+      - ./logs:/app/logs
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=UTC
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    profiles:
+      - arm64
+      - apple-silicon
+
