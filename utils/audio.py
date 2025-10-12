@@ -151,6 +151,54 @@ def process_audio_enhanced(file_path: Path, silence_threshold=-40, target_volume
         print(f"Error processing audio {file_path}: {e}")
         return False, 0, 0
 
+def process_audio_enhanced_with_sample_rate(file_path: Path, silence_threshold=-40, target_volume=-6, target_sample_rate=44100, silence_padding=200, create_backup=True):
+    """
+    Enhanced audio processing with configurable parameters including sample rate conversion
+
+    Args:
+        file_path: Path to the audio file
+        silence_threshold: Silence threshold in dB
+        target_volume: Target volume in dB
+        target_sample_rate: Target sample rate in Hz
+        silence_padding: Padding to add at start and end in ms
+        create_backup: Whether to create a backup of the original file
+
+    Returns:
+        Tuple of (success: bool, original_duration: float, new_duration: float)
+    """
+    try:
+        # Create backup if requested
+        if create_backup:
+            backup_path = file_path.with_suffix('.wav.backup')
+            if not backup_path.exists():
+                import shutil
+                shutil.copy2(file_path, backup_path)
+
+        # Load audio file
+        audio = AudioSegment.from_file(file_path)
+        original_duration = len(audio) / 1000.0
+
+        # Convert to target sample rate and format
+        audio = audio.set_frame_rate(target_sample_rate)
+        audio = audio.set_channels(1)  # Mono
+        audio = audio.set_sample_width(2)  # 16-bit
+
+        # Normalize audio (adjust volume)
+        change_in_dBFS = target_volume - audio.dBFS
+        normalized_audio = audio.apply_gain(change_in_dBFS)
+
+        # Trim silence and add padding
+        processed_audio = trim_silence(normalized_audio, silence_threshold, silence_padding=silence_padding)
+
+        # Export processed audio
+        processed_audio.export(file_path, format="wav")
+        new_duration = len(processed_audio) / 1000.0
+
+        return True, original_duration, new_duration
+    except Exception as e:
+        print(f"Error processing audio {file_path}: {e}")
+        return False, 0, 0
+
 def get_audio_info(file_path: Path):
     """
     Get comprehensive audio file information

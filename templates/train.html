@@ -168,10 +168,11 @@
                                     </select>
                                 </div>
                                 <div class="col-md-6">
-                                    <label for="promptList" class="form-label">Prompt List</label>
-                                    <select class="form-select" id="promptList" required>
-                                        <option value="">Select a prompt list...</option>
+                                    <label for="promptList" class="form-label">Prompt Lists <span class="badge bg-info">Multiple Selection</span></label>
+                                    <select class="form-select" id="promptList" multiple size="3" required>
+                                        <option value="">Select prompt lists...</option>
                                     </select>
+                                    <small class="form-text text-muted">Hold Ctrl/Cmd for multiple</small>
                                 </div>
                             </div>
                             <div class="row mt-3">
@@ -670,10 +671,18 @@
         }
 
         function startTraining() {
+            const promptListSelect = document.getElementById('promptList');
+            const promptListIds = Array.from(promptListSelect.selectedOptions).map(opt => opt.value).filter(v => v);
+
+            if (promptListIds.length === 0) {
+                alert('Please select at least one prompt list.');
+                return;
+            }
+
             const formData = new FormData();
             formData.append('training_type', document.querySelector('input[name="trainingType"]:checked').value);
             formData.append('profile_id', document.getElementById('voiceProfile').value);
-            formData.append('prompt_list_id', document.getElementById('promptList').value);
+            formData.append('prompt_list_ids', JSON.stringify(promptListIds));
             formData.append('model_size', document.getElementById('modelSize').value);
             formData.append('learning_rate', document.getElementById('learningRate').value);
             formData.append('batch_size', document.getElementById('batchSize').value);

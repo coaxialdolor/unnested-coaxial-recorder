@@ -6,6 +6,7 @@ import json
 import shutil
 import requests
 import base64
+import asyncio
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
@@ -193,6 +194,7 @@ async def create_profile(profile: VoiceProfile):
         # Create directory structure
         profile_dir.mkdir()
         (profile_dir / "clips").mkdir()
+        (profile_dir / "recordings").mkdir()
         (profile_dir / "prompts").mkdir()
 
         # Create profile metadata
@@ -1717,14 +1719,19 @@ async def start_postprocessing(request: Request):
         data = await request.json()
 
         profile_id = data.get("profile_id")
-        prompt_list_id = data.get("prompt_list_id")
+        # Support both single prompt_list_id (legacy) and prompt_list_ids (new multi-select)
+        prompt_list_ids = data.get("prompt_list_ids", [])
+        if not prompt_list_ids and data.get("prompt_list_id"):
+            prompt_list_ids = [data.get("prompt_list_id")]
+
         silence_threshold = data.get("silence_threshold", -40)
-        target_volume = data.get("target_volume", -20)
+        target_volume = data.get("target_volume", -6)  # Updated default to -6dB
+        target_sample_rate = data.get("target_sample_rate", 44100)  # Default to 44.1kHz
         silence_padding = data.get("silence_padding", 200)
         create_backup = data.get("create_backup", True)
 
-        if not profile_id or not prompt_list_id:
-            raise HTTPException(status_code=400, detail="profile_id and prompt_list_id are required")
+        if not profile_id or not prompt_list_ids:
+            raise HTTPException(status_code=400, detail="profile_id and prompt_list_ids are required")
 
         # Generate job ID
         import uuid
@@ -1734,9 +1741,10 @@ async def start_postprocessing(request: Request):
         processing_jobs[job_id] = {
             "status": "running",
             "profile_id": profile_id,
-            "prompt_list_id": prompt_list_id,
+            "prompt_list_ids": prompt_list_ids,
             "silence_threshold": silence_threshold,
             "target_volume": target_volume,
+            "target_sample_rate": target_sample_rate,
             "silence_padding": silence_padding,
             "create_backup": create_backup,
             "processed": 0,
@@ -1747,7 +1755,6 @@ async def start_postprocessing(request: Request):
         }
 
         # Start processing in background
-        import asyncio
         asyncio.create_task(process_audio_batch(job_id))
 
         return {"success": True, "job_id": job_id}
@@ -1761,44 +1768,50 @@ async def process_audio_batch(job_id: str):
         profile_dir = VOICES_DIR / job["profile_id"]
         recordings_dir = profile_dir / "recordings"
 
-        # Parse prompt list name
-        prompt_list_id = job["prompt_list_id"]
-        if prompt_list_id.startswith(f"{job['profile_id']}_"):
-            prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
-        else:
-            prompt_name = prompt_list_id
-
-        # Get files to process
+        # Get files to process from ALL selected prompt lists
         files_to_process = []
         metadata_file = profile_dir / "metadata.jsonl"
+
+        # Parse all prompt list names
+        prompt_names = []
+        for prompt_list_id in job["prompt_list_ids"]:
+            if prompt_list_id.startswith(f"{job['profile_id']}_"):
+                prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
+            else:
+                prompt_name = prompt_list_id
+            prompt_names.append(prompt_name)
+
+        # Collect files from all prompt lists while preserving metadata
         if metadata_file.exists():
             with open(metadata_file, "r", encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         try:
                             metadata = json.loads(line.strip())
-                            if metadata.get("prompt_list") == prompt_name:
+                            # Check if this file belongs to any of the selected prompt lists
+                            if metadata.get("prompt_list") in prompt_names:
                                 filename = metadata.get("filename")
                                 if filename:
                                     file_path = recordings_dir / filename
                                     if file_path.exists():
-                                        files_to_process.append(file_path)
+                                        files_to_process.append((file_path, metadata))
                         except json.JSONDecodeError:
                             continue
 
         job["total"] = len(files_to_process)
 
-        # Process each file
-        for i, file_path in enumerate(files_to_process):
+        # Process each file with sample rate conversion
+        for i, (file_path, metadata) in enumerate(files_to_process):
             job["current_file"] = file_path.name
             job["processed"] = i
 
-            # Process the file
-            from utils.audio import process_audio_enhanced
-            success, _, _ = process_audio_enhanced(
+            # Process the file with sample rate conversion
+            from utils.audio import process_audio_enhanced_with_sample_rate
+            success, _, _ = process_audio_enhanced_with_sample_rate(
                 file_path,
                 job["silence_threshold"],
                 job["target_volume"],
+                job["target_sample_rate"],
                 job["silence_padding"],
                 job["create_backup"]
             )
@@ -2100,7 +2113,7 @@ async def get_gpu_status():
 async def start_training(
     training_type: str = Form(...),
     profile_id: str = Form(...),
-    prompt_list_id: str = Form(...),
+    prompt_list_ids: str = Form(...),  # Now accepts JSON array
     model_size: str = Form(...),
     learning_rate: float = Form(...),
     batch_size: int = Form(...),
@@ -2117,6 +2130,14 @@ async def start_training(
 ):
     """Start training job"""
     try:
+        # Parse prompt_list_ids from JSON
+        import json as json_module
+        try:
+            parsed_prompt_list_ids = json_module.loads(prompt_list_ids)
+        except:
+            # Fallback for single value (backward compatibility)
+            parsed_prompt_list_ids = [prompt_list_ids]
+
         # Generate job ID
         import uuid
         job_id = str(uuid.uuid4())
@@ -2126,7 +2147,7 @@ async def start_training(
             "status": "running",
             "training_type": training_type,
             "profile_id": profile_id,
-            "prompt_list_id": prompt_list_id,
+            "prompt_list_ids": parsed_prompt_list_ids,
             "model_size": model_size,
             "learning_rate": learning_rate,
             "batch_size": batch_size,
@@ -2150,7 +2171,6 @@ async def start_training(
         }
 
         # Start training in background
-        import asyncio
         asyncio.create_task(train_model_background(job_id))
 
         return {"success": True, "job_id": job_id}

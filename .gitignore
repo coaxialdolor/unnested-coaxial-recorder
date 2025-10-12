@@ -61,13 +61,37 @@ logs/
 # Coverage
 htmlcov/
 
-# Output
-/output/
+# Output - Generated models and exports
+/output/*
+!/output/.gitkeep
 
-# Voice data (uncomment if you want to exclude voice recordings)
-# voices/*/recordings/
-# voices/*/clips/test_audio/
-converted_models/
+# Converted models
+converted_models/*
+!/converted_models/.gitkeep
+
+# Voice profiles - User-generated data
+# Exclude all voice profile directories and their contents
+voices/*/
+
+# Training data
+training/checkpoints/*
+training/logs/*
+!training/checkpoints/.gitkeep
+!training/logs/.gitkeep
+
+# Checkpoints - Keep metadata, exclude models
+checkpoints/*/
+!checkpoints/metadata/
+checkpoints/metadata/*
+!checkpoints/metadata/.gitkeep
+
+# Models cache
+models/*
+!models/.gitkeep
+
+# Application logs
+logs/*
+!logs/.gitkeep
 
 # Redundant/archived files
 probably_redundant/
