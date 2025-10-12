@@ -29,12 +29,11 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
 # Add conda to path
 ENV PATH=$CONDA_DIR/bin:$PATH
 
-# Accept conda Terms of Service for non-interactive usage
+# Configure conda to avoid ToS issues - use only conda-forge
 RUN conda config --set always_yes yes && \
-    echo "channels:" > ~/.condarc && \
-    echo "  - conda-forge" >> ~/.condarc && \
-    echo "  - defaults" >> ~/.condarc && \
-    echo "channel_priority: flexible" >> ~/.condarc
+    conda config --remove channels defaults || true && \
+    conda config --add channels conda-forge && \
+    conda config --set channel_priority strict
 
 # Stage 2: Python environment
 FROM base as builder
@@ -44,8 +43,14 @@ WORKDIR /app
 # Copy requirements
 COPY requirements.txt requirements_training.txt requirements_export.txt ./
 
-# Create conda environment with Python 3.10
-RUN conda create -n coaxial python=3.10 -y
+# Ensure conda-forge is the only channel in builder stage
+RUN conda config --set always_yes yes && \
+    conda config --remove channels defaults || true && \
+    conda config --add channels conda-forge && \
+    conda config --set channel_priority strict
+
+# Create conda environment with Python 3.10 from conda-forge only
+RUN conda create -n coaxial python=3.10 -c conda-forge -y
 
 # Activate environment
 SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
