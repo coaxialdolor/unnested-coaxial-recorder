@@ -32,6 +32,17 @@ except ImportError:
 # Create FastAPI app
 app = FastAPI(title="Voice Dataset Manager")
 
+# Health check endpoint for Docker
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for container orchestration"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "phoneme_support": PHONEME_SUPPORT,
+        "checkpoint_support": CHECKPOINT_SUPPORT
+    }
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

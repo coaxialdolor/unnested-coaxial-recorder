@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # GPU-enabled version (RTX 5060 Ti, 4090, 3090, etc.)
+  coaxial-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    image: coaxial-recorder:gpu
+    container_name: coaxial-recorder-gpu
+    restart: unless-stopped
+
+    # GPU configuration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    # Ports
+    ports:
+      - "8000:8000"
+
+    # Volumes for persistent data
+    volumes:
+      - ./voices:/app/voices
+      - ./output:/app/output
+      - ./checkpoints:/app/checkpoints
+      - ./logs:/app/logs
+
+    # Environment variables
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
+      - TZ=UTC
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits (adjust based on your system)
+    # Uncomment and modify if needed
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 16G
+    #       cpus: '8'
+
+    profiles:
+      - gpu
+
+  # CPU-only version (no GPU required)
+  coaxial-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: coaxial-recorder:cpu
+    container_name: coaxial-recorder-cpu
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./voices:/app/voices
+      - ./output:/app/output
+      - ./checkpoints:/app/checkpoints
+      - ./logs:/app/logs
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=UTC
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 8G
+    #       cpus: '4'
+
+    profiles:
+      - cpu
+

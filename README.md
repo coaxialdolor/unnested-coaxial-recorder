@@ -2,7 +2,9 @@
 
 A comprehensive web application for managing voice datasets with recording, organization, and export capabilities for AI voice synthesis projects.
 
-> **📌 Windows Users:** See [WINDOWS_README.md](WINDOWS_README.md) for Windows-specific installation instructions!
+> **🐳 Docker Users (Recommended):** See [DOCKER_README.md](DOCKER_README.md) - Includes GPU + MFA support with zero setup!
+
+> **📌 Windows Users:** See [WINDOWS_README.md](WINDOWS_README.md) for Windows-specific installation instructions
 
 > **📌 All Users:** For quick setup, see [SETUP_GUIDE.md](SETUP_GUIDE.md)
 

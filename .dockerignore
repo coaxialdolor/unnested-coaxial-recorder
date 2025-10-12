@@ -1,4 +1,73 @@
-*
-!requirements.txt
-!prompts/
-!piper_recording_studio/
+# Don't copy these to Docker image (speeds up build)
+
+# Virtual environments
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Local Python installations
+python310/
+python311/
+python3*/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Large data files (will be mounted as volumes)
+voices/
+output/
+checkpoints/
+converted_models/
+
+# Temporary files
+tmp/
+*.tmp
+*.temp
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Development files
+.env
+.env.local
+docker-compose.override.yml
+
+# Test files
+tests/
+test_*.py
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Downloaded archives
+*.tar.gz
+*.zip
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

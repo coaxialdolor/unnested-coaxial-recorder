@@ -1,0 +1,95 @@
+# CPU-only version for systems without NVIDIA GPU
+# Uses Conda for MFA support
+
+FROM ubuntu:22.04 as base
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CONDA_DIR=/opt/conda
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    git \
+    build-essential \
+    espeak-ng \
+    ffmpeg \
+    libsndfile1 \
+    sox \
+    portaudio19-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
+    /bin/bash ~/miniconda.sh -b -p $CONDA_DIR && \
+    rm ~/miniconda.sh && \
+    $CONDA_DIR/bin/conda clean -all -y
+
+# Add conda to path
+ENV PATH=$CONDA_DIR/bin:$PATH
+
+# Stage 2: Python environment
+FROM base as builder
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt requirements_training.txt requirements_export.txt ./
+
+# Create conda environment with Python 3.10
+RUN conda create -n coaxial python=3.10 -y
+
+# Activate environment
+SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
+
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Install PyTorch CPU version
+RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install Montreal Forced Aligner via conda
+RUN conda install -c conda-forge montreal-forced-aligner -y
+
+# Install core requirements
+RUN pip install -r requirements.txt
+
+# Install training requirements (excluding MFA)
+RUN grep -v "montreal-forced-alignment" requirements_training.txt | \
+    xargs -r pip install
+
+# Install export requirements
+RUN pip install -r requirements_export.txt
+
+# Download MFA models
+RUN mfa model download acoustic english_us_arpa || true
+RUN mfa model download dictionary english_us_arpa || true
+
+# Stage 3: Final runtime
+FROM base
+
+WORKDIR /app
+
+# Copy conda environment
+COPY --from=builder $CONDA_DIR $CONDA_DIR
+
+# Copy application
+COPY . .
+
+# Create directories
+RUN mkdir -p voices output logs checkpoints
+
+# Expose port
+EXPOSE 8000
+
+# Set up conda
+SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run app
+CMD ["conda", "run", "--no-capture-output", "-n", "coaxial", "python", "app.py"]
+
