@@ -189,6 +189,16 @@ git checkout HEAD -- FILENAME
 - Safe to delete `/Users/petter/Desktop/coaxial-recorder` and clone fresh from GitHub
 - **Important**: Backup `voices/` folder first if you have recordings!
 
+### New Files Created (Post-Cleanup)
+1. ✅ `probably_redundant/README.md` - Detailed documentation of moved files
+2. ✅ `CLEANUP_SUMMARY.md` - This comprehensive cleanup report
+3. ✅ `FILE_STRUCTURE.md` - Complete repository structure documentation
+4. ✅ `Dockerfile.arm64` - Apple Silicon (M1/M2/M3) Docker image
+5. ✅ Updated `.gitignore` - Excludes `probably_redundant/`
+6. ✅ Updated `docker-compose.yml` - Added ARM64 profile
+7. ✅ Updated `DOCKER_README.md` - Added ARM64 instructions
+8. ✅ Updated `README.md` - Added ARM64 Docker and FILE_STRUCTURE.md links
+
 ---
 
 **Questions?** Check `probably_redundant/README.md` for detailed info on each file.

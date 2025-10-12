@@ -1,0 +1,99 @@
+# Multi-stage build for Coaxial Recorder on Apple Silicon (M1/M2/M3)
+# Optimized for ARM64 architecture with Metal Performance Shaders support
+
+# Stage 1: Base with Python 3.10
+FROM python:3.10-slim-bookworm AS base
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CONDA_DIR=/opt/conda
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    git \
+    build-essential \
+    espeak-ng \
+    ffmpeg \
+    libsndfile1 \
+    sox \
+    portaudio19-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda for ARM64
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh -O ~/miniconda.sh && \
+    /bin/bash ~/miniconda.sh -b -p $CONDA_DIR && \
+    rm ~/miniconda.sh && \
+    $CONDA_DIR/bin/conda clean -all -y
+
+# Add conda to path
+ENV PATH=$CONDA_DIR/bin:$PATH
+
+# Stage 2: Python environment
+FROM base AS builder
+
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt requirements_training.txt requirements_export.txt ./
+
+# Create conda environment with Python 3.10
+RUN conda create -n coaxial python=3.10 -y && \
+    echo "source activate coaxial" > ~/.bashrc
+
+# Activate environment and install packages
+SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
+
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Install PyTorch for ARM64 (CPU-only, but optimized for Apple Silicon when run natively)
+# Note: When running on actual M1/M2 Macs natively (not Docker), PyTorch can use MPS
+# In Docker on M1, this will be CPU-only but ARM64-optimized
+RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install Montreal Forced Aligner via conda (ARM64 compatible)
+RUN conda install -c conda-forge montreal-forced-aligner -y
+
+# Install core requirements
+RUN pip install -r requirements.txt
+
+# Install training requirements (excluding MFA since we installed via conda)
+RUN grep -v "montreal-forced-alignment" requirements_training.txt | \
+    xargs -r pip install
+
+# Install export requirements
+RUN pip install -r requirements_export.txt
+
+# Download MFA models (optional but useful)
+RUN mfa model download acoustic english_us_arpa || true
+RUN mfa model download dictionary english_us_arpa || true
+
+# Stage 3: Final runtime image
+FROM base
+
+WORKDIR /app
+
+# Copy conda environment from builder
+COPY --from=builder $CONDA_DIR $CONDA_DIR
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p voices output logs checkpoints
+
+# Expose port for web interface
+EXPOSE 8000
+
+# Set up conda activation
+SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command
+CMD ["conda", "run", "--no-capture-output", "-n", "coaxial", "python", "app.py"]
+

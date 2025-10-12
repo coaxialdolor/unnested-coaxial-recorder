@@ -3,17 +3,30 @@
 ## Overview
 
 This Docker setup provides a **completely self-contained** environment with:
-- ✅ NVIDIA GPU support (CUDA 12.1)
+- ✅ NVIDIA GPU support (CUDA 12.1) - `Dockerfile.gpu`
+- ✅ Apple Silicon ARM64 support (M1/M2/M3) - `Dockerfile.arm64` ⭐ NEW
+- ✅ CPU-only x86_64 support - `Dockerfile.cpu`
 - ✅ Montreal Forced Aligner (MFA) via Conda
 - ✅ All dependencies pre-installed
 - ✅ No need to install Conda on host system
-- ✅ Works on Linux, Windows, and macOS (with GPU or CPU)
+- ✅ Works on Linux, Windows, and macOS
+
+## Which Docker Image Should I Use?
+
+| Your System | Recommended Image | Command | Performance |
+|-------------|-------------------|---------|-------------|
+| **NVIDIA GPU** (RTX 30/40/50-series) | `Dockerfile.gpu` | `--profile gpu` | ⚡ Fastest (GPU-accelerated) |
+| **Apple Silicon** (M1/M2/M3 Mac) | `Dockerfile.arm64` | `--profile arm64` | ✅ Good (ARM64-optimized) |
+| **Intel/AMD CPU** (No GPU) | `Dockerfile.cpu` | `--profile cpu` | ⚠️ Slower (CPU-only) |
+| **Apple Silicon** (Best performance) | Native install | `bash install.sh` | ⚡⚡ Fastest (MPS support) |
+
+**Recommendation for M1/M2/M3 Macs**: Use **native installation** (`bash install.sh`) for best performance, as it can leverage Metal Performance Shaders (MPS). Use Docker ARM64 only if you need isolation.
 
 ## Quick Start
 
 ### Prerequisites
 
-**For GPU version:**
+**For GPU version (NVIDIA):**
 1. Docker Engine 20.10+
 2. NVIDIA GPU with driver 525.60.13+
 3. NVIDIA Container Toolkit
@@ -21,7 +34,11 @@ This Docker setup provides a **completely self-contained** environment with:
 **For CPU version:**
 1. Docker Engine 20.10+
 
-### Option 1: GPU Version (Recommended for Training)
+**For ARM64 version (Apple Silicon M1/M2/M3):**
+1. Docker Desktop for Mac 4.0+
+2. M1, M2, or M3 Mac
+
+### Option 1: GPU Version (Recommended for NVIDIA GPUs)
 
 ```bash
 # Build and start with GPU support
@@ -33,7 +50,24 @@ docker-compose logs -f coaxial-gpu
 # Open browser to http://localhost:8000
 ```
 
-### Option 2: CPU Version (For Recording/Basic Use)
+### Option 2: ARM64 Version (For Apple Silicon Macs) ⭐ NEW
+
+```bash
+# Build and start on M1/M2/M3 Mac
+docker-compose --profile arm64 up -d
+
+# Or use the apple-silicon alias
+docker-compose --profile apple-silicon up -d
+
+# View logs
+docker-compose logs -f coaxial-arm64
+
+# Open browser to http://localhost:8000
+```
+
+**Note**: This version is optimized for Apple Silicon and includes MFA support. While it runs CPU-only in Docker, it's ARM64-native for better performance on M-series Macs.
+
+### Option 3: CPU Version (For x86_64 Systems without GPU)
 
 ```bash
 # Build and start CPU-only
@@ -82,13 +116,17 @@ wsl --install
 # Download from: https://www.nvidia.com/Download/index.aspx
 ```
 
-#### macOS
+#### macOS (Apple Silicon M1/M2/M3)
 ```bash
 # Install Docker Desktop for Mac
 # Download from: https://www.docker.com/products/docker-desktop
 
+# For Apple Silicon Macs, use the ARM64 version:
+docker-compose --profile arm64 up -d
+
 # Note: GPU support on macOS is limited to Metal API
-# Use CPU version for MFA support
+# The ARM64 Docker image is CPU-only but ARM64-optimized
+# For best performance on M-series Macs, use native installation instead
 ```
 
 ### Step 2: Verify NVIDIA Setup (GPU only)
@@ -106,10 +144,13 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 # Clone or download project
 cd coaxial-recorder
 
-# GPU version
+# GPU version (NVIDIA)
 docker-compose --profile gpu up --build -d
 
-# OR CPU version
+# OR ARM64 version (Apple Silicon)
+docker-compose --profile arm64 up --build -d
+
+# OR CPU version (x86_64)
 docker-compose --profile cpu up --build -d
 ```
 
@@ -119,13 +160,19 @@ docker-compose --profile cpu up --build -d
 
 ```bash
 # Start
-docker-compose --profile gpu up -d  # or --profile cpu
+docker-compose --profile gpu up -d      # NVIDIA GPU
+docker-compose --profile arm64 up -d    # Apple Silicon
+docker-compose --profile cpu up -d      # CPU-only
 
 # Stop
-docker-compose --profile gpu down
+docker-compose --profile gpu down       # NVIDIA GPU
+docker-compose --profile arm64 down     # Apple Silicon
+docker-compose --profile cpu down       # CPU-only
 
 # Restart
-docker-compose --profile gpu restart
+docker-compose --profile gpu restart    # NVIDIA GPU
+docker-compose --profile arm64 restart  # Apple Silicon
+docker-compose --profile cpu restart    # CPU-only
 
 # View logs
 docker-compose logs -f

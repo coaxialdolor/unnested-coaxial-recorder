@@ -7,10 +7,15 @@ A comprehensive web application for **creating custom voice models** for AI voic
 > **🗑️ Uninstall:** Complete removal script available: `./uninstall.sh`
 
 > **🐳 Docker Users (Recommended):** See [DOCKER_README.md](DOCKER_README.md) - Includes GPU + MFA support with zero setup!
+> - **NVIDIA GPU**: `docker-compose --profile gpu up -d`
+> - **Apple Silicon (M1/M2/M3)**: `docker-compose --profile arm64 up -d` ⭐ NEW
+> - **CPU-only**: `docker-compose --profile cpu up -d`
 
 > **📌 Windows Users:** See [WINDOWS_README.md](WINDOWS_README.md) for Windows-specific installation instructions
 
 > **📌 All Users:** For quick setup, see [SETUP_GUIDE.md](SETUP_GUIDE.md)
+
+> **📁 File Structure:** See [FILE_STRUCTURE.md](FILE_STRUCTURE.md) for complete repository documentation
 
 ## Features
 
