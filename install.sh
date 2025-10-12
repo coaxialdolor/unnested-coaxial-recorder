@@ -905,7 +905,15 @@ chmod +x test_installation.py
 
 # Run installation test and collect results
 print_status "Running installation test..."
-$PYTHON_CMD test_installation.py
+# Make sure we use the venv Python
+if [ -f "venv/bin/python" ]; then
+    venv/bin/python test_installation.py
+elif [ -f "venv/Scripts/python.exe" ]; then
+    venv/Scripts/python.exe test_installation.py
+else
+    print_warning "Could not find venv Python, using system Python"
+    $PYTHON_CMD test_installation.py
+fi
 INSTALLATION_TEST_RESULT=$?
 
 # Initialize installation summary
@@ -916,29 +924,37 @@ SUCCESSFUL_COMPONENTS=""
 # Check individual components
 print_status "Verifying installation components..."
 
+# Use venv Python for all checks
+VENV_PYTHON="$PYTHON_CMD"
+if [ -f "venv/bin/python" ]; then
+    VENV_PYTHON="venv/bin/python"
+elif [ -f "venv/Scripts/python.exe" ]; then
+    VENV_PYTHON="venv/Scripts/python.exe"
+fi
+
 # Check core components
-if $PYTHON_CMD -c "import fastapi, uvicorn, pydub, numpy, pandas" 2>/dev/null; then
+if $VENV_PYTHON -c "import fastapi, uvicorn, pydub, numpy, pandas" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Core Dependencies"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS Core Dependencies"
 fi
 
 # Check training components
-if $PYTHON_CMD -c "import torch, torchaudio, transformers, datasets, librosa, soundfile, scipy, sklearn" 2>/dev/null; then
+if $VENV_PYTHON -c "import torch, torchaudio, transformers, datasets, librosa, soundfile, scipy, sklearn" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Training Dependencies"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS Training Dependencies"
 fi
 
 # Check TTS components
-if $PYTHON_CMD -c "import piper, phonemizer" 2>/dev/null; then
+if $VENV_PYTHON -c "import piper, phonemizer" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS TTS Dependencies"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS TTS Dependencies"
 fi
 
 # Check Piper training
-if $PYTHON_CMD -c "import piper_train" 2>/dev/null; then
+if $VENV_PYTHON -c "import piper_train" 2>/dev/null; then
     SUCCESSFUL_COMPONENTS="$SUCCESSFUL_COMPONENTS Piper Training"
 else
     FAILED_COMPONENTS="$FAILED_COMPONENTS Piper Training"
@@ -1077,7 +1093,13 @@ else
 fi
 echo ""
 echo "3. Or test the installation:"
-echo "   $PYTHON_CMD test_installation.py"
+if [ -f "venv/bin/python" ]; then
+    echo "   venv/bin/python test_installation.py"
+elif [ -f "venv/Scripts/python.exe" ]; then
+    echo "   venv\\Scripts\\python.exe test_installation.py"
+else
+    echo "   source venv/bin/activate && python test_installation.py"
+fi
 echo ""
 
 if [ "$OS" == "windows" ]; then
