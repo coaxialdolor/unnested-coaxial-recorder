@@ -29,6 +29,11 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
 # Add conda to path
 ENV PATH=$CONDA_DIR/bin:$PATH
 
+# Accept conda Terms of Service for non-interactive usage
+RUN conda config --set always_yes yes && \
+    conda config --add channels conda-forge && \
+    conda update conda -y
+
 # Stage 2: Python environment
 FROM base as builder
 
