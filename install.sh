@@ -665,6 +665,13 @@ else
     exit 1
 fi
 
+# Install PyTorch Lightning for training
+print_status "Installing PyTorch Lightning for training..."
+pip install 'lightning>=2.0.0' || {
+    print_warning "Lightning installation failed, trying older version..."
+    pip install 'pytorch-lightning>=2.0.0' || print_warning "Could not install PyTorch Lightning"
+}
+
 # Install training requirements with MFA priority
 print_status "Installing training dependencies..."
 
@@ -827,8 +834,9 @@ esac
 
 if [ $SKIP_MFA -eq 1 ]; then
     if [ -f "requirements_training.txt" ]; then
-        # Create compatible requirements file without MFA
-        grep -v "montreal-forced-alignment" requirements_training.txt > requirements_training_compatible.txt
+        # Create compatible requirements file without MFA and Lightning (already installed)
+        grep -v "montreal-forced-alignment" requirements_training.txt | \
+        grep -v "lightning" > requirements_training_compatible.txt
         pip install -r requirements_training_compatible.txt
         rm -f requirements_training_compatible.txt
     else
@@ -856,11 +864,22 @@ if [ $SKIP_MFA -eq 1 ]; then
 else
     # Normal installation with MFA (Linux/Mac only)
     if [ -f "requirements_training.txt" ]; then
-        pip install -r requirements_training.txt
+        # Exclude Lightning (already installed above) and MFA (will be installed separately)
+        grep -v "lightning" requirements_training.txt > requirements_training_temp.txt
+        pip install -r requirements_training_temp.txt
+        rm -f requirements_training_temp.txt
     else
         pip install transformers datasets accelerate evaluate librosa soundfile scipy scikit-learn
         pip install tensorboard wandb phonemizer montreal-forced-alignment
     fi
+fi
+
+# Apply Lightning patches for GPU compatibility (RTX 5060 Ti and newer)
+print_status "Applying Lightning patches for modern GPU compatibility..."
+if [ -f "utils/patch_lightning.py" ]; then
+    python utils/patch_lightning.py || print_warning "Lightning patching skipped (non-critical)"
+else
+    print_warning "Lightning patch script not found (non-critical)"
 fi
 
 # Install TTS-specific dependencies

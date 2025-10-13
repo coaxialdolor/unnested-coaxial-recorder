@@ -2368,6 +2368,7 @@ async def start_training(
     early_stopping: int = Form(...),
     use_gpu: bool = Form(...),
     mixed_precision: bool = Form(...),
+    use_mfa: bool = Form(True),  # MFA alignment option
     output_dir: str = Form(...),
     model_name: str = Form(""),
     checkpoint_path: str = Form("")
@@ -2402,6 +2403,7 @@ async def start_training(
             "early_stopping": early_stopping,
             "use_gpu": use_gpu,
             "mixed_precision": mixed_precision,
+            "use_mfa": use_mfa,  # Add MFA option
             "output_dir": output_dir,
             "model_name": model_name,
             "checkpoint_path": checkpoint_path,
@@ -2422,60 +2424,93 @@ async def start_training(
         raise HTTPException(status_code=500, detail=str(e))
 
 async def train_model_background(job_id: str):
-    """Train model in background (simulated)
-
-    NOTE: When implementing actual training, use job["prompt_list_ids"] to collect
-    audio files from multiple prompt lists (same logic as postprocessing and export):
-
-    prompt_names = []
-    for prompt_list_id in job["prompt_list_ids"]:
-        if prompt_list_id.startswith(f"{job['profile_id']}_"):
-            prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
-        else:
-            prompt_name = prompt_list_id
-        prompt_names.append(prompt_name)
-
-    # Then collect files: if metadata.get("prompt_list") in prompt_names
-    """
+    """Train model in background using actual PyTorch Lightning training"""
     try:
         job = training_jobs[job_id]
-
-        # Simulate training progress
-        for epoch in range(1, job["total_epochs"] + 1):
-            if training_jobs[job_id]["status"] != "running":
-                break
-
-            job["current_epoch"] = epoch
-
-            # Simulate loss decrease
-            base_loss = 2.0
-            loss = base_loss * (0.9 ** (epoch / 10))
-            job["current_loss"] = loss
-
-            # Simulate console output
-            job["console_output"].append(f"Epoch {epoch}/{job['total_epochs']}: Loss = {loss:.4f}")
-
-            # Calculate ETA
-            remaining_epochs = job["total_epochs"] - epoch
-            eta_minutes = remaining_epochs * 2  # Assume 2 minutes per epoch
-            if eta_minutes > 60:
-                eta_hours = eta_minutes / 60
-                job["eta"] = f"{eta_hours:.1f}h"
+        
+        # Import training utilities
+        from train_model import prepare_dataset
+        from utils.vits_training import train_tts_model
+        
+        # Prepare prompt names from IDs
+        prompt_names = []
+        for prompt_list_id in job["prompt_list_ids"]:
+            if prompt_list_id.startswith(f"{job['profile_id']}_"):
+                prompt_name = prompt_list_id[len(job['profile_id']) + 1:]
             else:
-                job["eta"] = f"{eta_minutes:.0f}m"
-
-            # Simulate training time
-            await asyncio.sleep(1)  # In real implementation, this would be actual training
-
-        # Mark as completed
-        if training_jobs[job_id]["status"] == "running":
+                prompt_name = prompt_list_id
+            prompt_names.append(prompt_name)
+        
+        # Log start
+        job["console_output"].append(f"=== Starting ACTUAL TTS Model Training ===")
+        job["console_output"].append(f"Profile: {job['profile_id']}")
+        job["console_output"].append(f"Prompt Lists: {', '.join(prompt_names)}")
+        job["console_output"].append(f"Training Mode: {'MFA-aligned' if job['use_mfa'] else 'Basic (phoneme-only)'}")
+        job["console_output"].append(f"GPU: {'enabled' if job['use_gpu'] else 'disabled'}")
+        job["console_output"].append(f"Mixed Precision: {'enabled' if job['mixed_precision'] else 'disabled'}")
+        job["console_output"].append("")
+        
+        # Prepare dataset
+        job["console_output"].append("Preparing dataset...")
+        
+        # Use first prompt list for dataset prep (they should be combined in prepare_dataset)
+        dataset_info = prepare_dataset(
+            profile_id=job["profile_id"],
+            prompt_list_id=job["prompt_list_ids"][0] if job["prompt_list_ids"] else "",
+            output_dir=job["output_dir"],
+            language_code=job.get("language_code", "en-US"),
+            audio_source="original"
+        )
+        
+        if not dataset_info.get("transcripts"):
+            raise Exception("No training data found!")
+        
+        job["console_output"].append(f"Dataset prepared: {len(dataset_info.get('transcripts', []))} samples")
+        job["console_output"].append("")
+        
+        # Prepare training config
+        training_config = {
+            'learning_rate': job["learning_rate"],
+            'batch_size': job["batch_size"],
+            'epochs': job["total_epochs"],
+            'save_interval': job["save_interval"],
+            'early_stopping': job["early_stopping"],
+            'mixed_precision': job["mixed_precision"],
+            'sample_rate': 22050,
+            'hidden_dim': 256 if job["model_size"] == 'small' else 512 if job["model_size"] == 'medium' else 1024
+        }
+        
+        # Run actual training
+        job["console_output"].append("Initializing PyTorch Lightning trainer...")
+        job["console_output"].append(f"Model will be saved to: {job['output_dir']}/checkpoints/")
+        job["console_output"].append("")
+        
+        success, message = train_tts_model(
+            dataset_info=dataset_info,
+            output_dir=job["output_dir"],
+            config=training_config,
+            use_mfa=job["use_mfa"],
+            checkpoint_path=job.get("checkpoint_path") if job.get("checkpoint_path") else None
+        )
+        
+        if success:
             training_jobs[job_id]["status"] = "completed"
-            training_jobs[job_id]["console_output"].append("Training completed successfully!")
+            training_jobs[job_id]["console_output"].append("")
+            training_jobs[job_id]["console_output"].append("=== Training Completed Successfully! ===")
+            training_jobs[job_id]["console_output"].append(message)
+        else:
+            raise Exception(message)
 
     except Exception as e:
+        import traceback
         training_jobs[job_id]["status"] = "failed"
         training_jobs[job_id]["error"] = str(e)
-        training_jobs[job_id]["console_output"].append(f"Training failed: {str(e)}")
+        training_jobs[job_id]["console_output"].append("")
+        training_jobs[job_id]["console_output"].append(f"=== Training Failed ===")
+        training_jobs[job_id]["console_output"].append(f"Error: {str(e)}")
+        training_jobs[job_id]["console_output"].append("")
+        training_jobs[job_id]["console_output"].append("Traceback:")
+        training_jobs[job_id]["console_output"].append(traceback.format_exc())
 
 @app.get("/api/train/status/{job_id}")
 async def get_training_status(job_id: str):
@@ -2828,35 +2863,43 @@ async def get_training_file_counts(profile_id: str, request: Request):
 
 @app.get("/api/test/discover-checkpoints")
 async def discover_checkpoints():
-    """Discover all checkpoint files in the checkpoints directory"""
+    """Discover all checkpoint files in checkpoints and training output directories"""
     try:
-        checkpoints_dir = Path("checkpoints")
         discovered = []
         
-        if not checkpoints_dir.exists():
-            return {"success": True, "checkpoints": []}
+        # Search in multiple directories
+        search_dirs = [
+            Path("checkpoints"),
+            Path("training/checkpoints"),
+            Path("models"),
+            Path("output")
+        ]
         
-        # Search for all .ckpt, .pt, .pth files
-        for checkpoint_file in checkpoints_dir.rglob("*.ckpt"):
-            try:
-                # Get file info
-                file_size = checkpoint_file.stat().st_size
-                size_mb = file_size / (1024 * 1024)
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
                 
-                # Try to determine language from path
-                parts = checkpoint_file.parts
-                language = "unknown"
-                if len(parts) >= 2:
-                    # Try to extract language code (e.g., sv-SE, en-US)
-                    for part in parts:
-                        if '-' in part and len(part) <= 6:
-                            language = part
-                            break
-                
-                # Get relative path from checkpoints directory
-                relative_path = checkpoint_file.relative_to(Path("."))
-                
-                discovered.append({
+            # Search for all .ckpt, .pt, .pth files
+            for checkpoint_file in search_dir.rglob("*.ckpt"):
+                try:
+                    # Get file info
+                    file_size = checkpoint_file.stat().st_size
+                    size_mb = file_size / (1024 * 1024)
+                    
+                    # Try to determine language from path
+                    parts = checkpoint_file.parts
+                    language = "unknown"
+                    if len(parts) >= 2:
+                        # Try to extract language code (e.g., sv-SE, en-US)
+                        for part in parts:
+                            if '-' in part and len(part) <= 6:
+                                language = part
+                                break
+                    
+                    # Get relative path from working directory
+                    relative_path = checkpoint_file.relative_to(Path("."))
+                    
+                    discovered.append({
                     "name": checkpoint_file.stem,
                     "filename": checkpoint_file.name,
                     "path": str(relative_path).replace("\\", "/"),

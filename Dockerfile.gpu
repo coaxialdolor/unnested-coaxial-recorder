@@ -48,8 +48,12 @@ SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
 # Upgrade pip
 RUN pip install --upgrade pip
 
-# Install PyTorch with CUDA 12.1 (compatible with most GPUs)
+# Install PyTorch with CUDA 12.1 (compatible with RTX 5060 Ti and newer GPUs)
+# Using CUDA 12.1 ensures compatibility with compute capability 8.9+
 RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Install PyTorch Lightning for training (RTX 5060 Ti optimized)
+RUN pip install lightning>=2.0.0
 
 # Install Montreal Forced Aligner via conda (this is the key!)
 RUN conda install -c conda-forge montreal-forced-aligner -y
@@ -57,8 +61,9 @@ RUN conda install -c conda-forge montreal-forced-aligner -y
 # Install core requirements
 RUN pip install -r requirements.txt
 
-# Install training requirements (excluding MFA since we installed via conda)
+# Install training requirements (excluding MFA and lightning since already installed)
 RUN grep -v "montreal-forced-alignment" requirements_training.txt | \
+    grep -v "lightning" | \
     grep -v '^#' | grep -v '^$' | \
     xargs -r pip install
 
@@ -68,6 +73,10 @@ RUN pip install -r requirements_export.txt
 # Download MFA models (optional but useful)
 RUN mfa model download acoustic english_us_arpa || true
 RUN mfa model download dictionary english_us_arpa || true
+
+# Apply Lightning patches for RTX 5060 Ti compatibility
+COPY utils/patch_lightning.py /tmp/patch_lightning.py
+RUN python /tmp/patch_lightning.py || true
 
 # Stage 3: Final runtime image
 FROM base

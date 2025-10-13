@@ -35,16 +35,24 @@ RUN pip install --upgrade pip
 # Install PyTorch for ARM64 (CPU-only, optimized for Apple Silicon)
 RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
+# Install PyTorch Lightning for training
+RUN pip install lightning>=2.0.0
+
 # Install core requirements
 RUN pip install -r requirements.txt
 
-# Install training requirements (excluding MFA and comments)
+# Install training requirements (excluding MFA, lightning, and comments)
 RUN grep -vE "montreal-forced-align(er|ment)" requirements_training.txt | \
+    grep -v "lightning" | \
     grep -vE '^\s*#' | \
     xargs -r pip install
 
 # Install export requirements
 RUN pip install -r requirements_export.txt
+
+# Apply Lightning patches
+COPY utils/patch_lightning.py /tmp/patch_lightning.py
+RUN python /tmp/patch_lightning.py || true
 
 # Stage 3: Final runtime image
 FROM base

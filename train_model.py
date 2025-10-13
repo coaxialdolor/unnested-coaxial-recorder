@@ -18,6 +18,7 @@ sys.path.append(str(Path(__file__).parent))
 from utils.phonemes import get_phoneme_manager, is_language_supported
 from utils.mfa import get_mfa_aligner, is_mfa_available
 from utils.checkpoints import get_checkpoint_manager, download_checkpoint, get_available_checkpoints
+from utils.vits_training import train_tts_model
 
 def setup_logging():
     """Setup logging configuration"""
@@ -289,29 +290,46 @@ def train_model(args):
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # For now, this is a placeholder that simulates training
-    # In a real implementation, this would integrate with Piper TTS
-    logging.info("Training simulation started...")
+    # Prepare training configuration
+    training_config = {
+        'learning_rate': args.learning_rate,
+        'batch_size': args.batch_size,
+        'epochs': args.epochs,
+        'save_interval': args.save_interval,
+        'early_stopping': args.early_stopping,
+        'mixed_precision': args.mixed_precision,
+        'sample_rate': 22050,
+        'hidden_dim': 256 if args.model_size == 'small' else 512 if args.model_size == 'medium' else 1024
+    }
+
+    # Determine if MFA should be used
+    use_mfa = dataset_info.get("mfa_aligned", False) and args.use_mfa
+
+    # Train the model
+    logging.info("Starting ACTUAL TTS model training...")
+    logging.info(f"Training mode: {'MFA-aligned' if use_mfa else 'Basic (phoneme-only)'}")
+    logging.info(f"GPU acceleration: {'enabled' if args.use_gpu else 'disabled'}")
+    logging.info(f"Mixed precision: {'enabled' if args.mixed_precision else 'disabled'}")
 
     try:
-        import torch
+        success, message = train_tts_model(
+            dataset_info=dataset_info,
+            output_dir=args.output_dir,
+            config=training_config,
+            use_mfa=use_mfa,
+            checkpoint_path=checkpoint_path if checkpoint_path else None
+        )
 
-        # Simulate training progress
-        for epoch in range(1, args.epochs + 1):
-            # Simulate loss decrease
-            loss = 2.0 * (0.9 ** (epoch / 10))
-            logging.info(f"Epoch {epoch}/{args.epochs}: Loss = {loss:.4f}")
-
-            # Save checkpoint
-            if epoch % args.save_interval == 0:
-                checkpoint_path = os.path.join(args.output_dir, f"checkpoint_epoch_{epoch}.pth")
-                logging.info(f"Saving checkpoint: {checkpoint_path}")
-
-        logging.info("Training completed successfully!")
-        return True
+        if success:
+            logging.info("Training completed successfully!")
+            logging.info(message)
+            return True
+        else:
+            logging.error(f"Training failed: {message}")
+            return False
 
     except Exception as e:
-        logging.error(f"Training failed: {e}")
+        logging.error(f"Training failed: {e}", exc_info=True)
         return False
 
 def main():
@@ -335,6 +353,7 @@ def main():
     # Training options
     parser.add_argument("--use-gpu", action="store_true", help="Use GPU acceleration")
     parser.add_argument("--mixed-precision", action="store_true", help="Use mixed precision training")
+    parser.add_argument("--use-mfa", action="store_true", default=True, help="Use MFA alignment if available (default: True)")
     parser.add_argument("--checkpoint", help="Path to checkpoint for fine-tuning")
     parser.add_argument("--base-voice", help="Base voice to use for fine-tuning (format: language_code.voice_id, e.g., en-US.amy)")
 

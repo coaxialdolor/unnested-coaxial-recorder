@@ -319,7 +319,7 @@
                                 </div>
                             </div>
                             <div class="row mt-3">
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="useGPU" checked>
                                         <label class="form-check-label" for="useGPU">
@@ -330,7 +330,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="mixedPrecision" checked>
                                         <label class="form-check-label" for="mixedPrecision">
@@ -338,6 +338,17 @@
                                         </label>
                                         <div class="parameter-help mt-1">
                                             Faster training with lower memory usage
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="useMFA" checked>
+                                        <label class="form-check-label" for="useMFA">
+                                            <i class="fas fa-align-center me-1"></i>Use MFA Alignment
+                                        </label>
+                                        <div class="parameter-help mt-1">
+                                            <strong>Best quality!</strong> Uses Montreal Forced Aligner for precise audio-text timing. Fallback to basic if unavailable.
                                         </div>
                                     </div>
                                 </div>
@@ -533,7 +544,7 @@
 
             // All other inputs
             ['voiceProfile', 'promptList', 'modelSize', 'learningRate', 'batchSize', 'epochs',
-             'saveInterval', 'earlyStopping', 'useGPU', 'mixedPrecision', 'outputDir', 'modelName'].forEach(id => {
+             'saveInterval', 'earlyStopping', 'useGPU', 'mixedPrecision', 'useMFA', 'outputDir', 'modelName'].forEach(id => {
                 document.getElementById(id).addEventListener('change', updateTerminalCommand);
                 document.getElementById(id).addEventListener('input', updateTerminalCommand);
             });
@@ -628,6 +639,7 @@
             const earlyStopping = document.getElementById('earlyStopping').value;
             const useGPU = document.getElementById('useGPU').checked;
             const mixedPrecision = document.getElementById('mixedPrecision').checked;
+            const useMFA = document.getElementById('useMFA').checked;
             const outputDir = document.getElementById('outputDir').value;
             const modelName = document.getElementById('modelName').value;
             const checkpointPath = document.getElementById('checkpointPath').value;
@@ -670,6 +682,12 @@
 
             if (mixedPrecision) {
                 command += ' --mixed-precision';
+            }
+
+            if (useMFA) {
+                command += ' --use-mfa';
+            } else {
+                command += ' --no-use-mfa';
             }
 
             document.getElementById('terminalCommand').textContent = command;
@@ -793,6 +811,7 @@
             formData.append('early_stopping', document.getElementById('earlyStopping').value);
             formData.append('use_gpu', document.getElementById('useGPU').checked);
             formData.append('mixed_precision', document.getElementById('mixedPrecision').checked);
+            formData.append('use_mfa', document.getElementById('useMFA').checked);
             formData.append('output_dir', document.getElementById('outputDir').value);
             formData.append('model_name', document.getElementById('modelName').value);
             formData.append('checkpoint_path', document.getElementById('checkpointPath').value);
