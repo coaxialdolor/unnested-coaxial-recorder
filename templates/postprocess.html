@@ -234,6 +234,19 @@
             </div>
         </div>
 
+        <!-- Delete Preprocessed Files Section -->
+        <div class="row mt-4 mb-3">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle me-2"></i>Not happy with the results?</h6>
+                    <p class="mb-2">Delete the processed files and try again with different settings.</p>
+                    <button class="btn btn-outline-danger" id="deletePreprocessedBtn" onclick="deletePreprocessedFiles()" disabled>
+                        <i class="fas fa-trash me-2"></i>Delete Preprocessed Files
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="row mt-4">
             <div class="col-lg-6">
                 <div class="card">
@@ -272,7 +285,6 @@
                                     <div id="preprocessedStats" class="small text-muted"></div>
                                 </div>
                             </div>
-                            <div class="alert alert-info mt-3" id="comparisonInfo"></div>
                         </div>
                     </div>
                 </div>
@@ -291,6 +303,18 @@
                                 <i class="fas fa-info-circle me-2"></i>No processing history available
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Changes Applied Card -->
+                <div class="card mt-3" id="changesAppliedCard" style="display: none;">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-line me-2"></i>Changes Applied
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="changesInfo" class="alert alert-success"></div>
                     </div>
                 </div>
             </div>
@@ -668,10 +692,75 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
+        function updateDeleteButton() {
+            const profileId = document.getElementById('comparisonProfile').value;
+            const deleteBtn = document.getElementById('deletePreprocessedBtn');
+
+            if (!profileId) {
+                deleteBtn.disabled = true;
+                return;
+            }
+
+            // Check if there are any preprocessed files
+            fetch(`/api/postprocess/comparison-files/${profileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const hasPreprocessedFiles = data.some(file => file.has_preprocessed);
+                    deleteBtn.disabled = !hasPreprocessedFiles;
+
+                    if (hasPreprocessedFiles) {
+                        const count = data.filter(file => file.has_preprocessed).length;
+                        deleteBtn.innerHTML = `<i class="fas fa-trash me-2"></i>Delete ${count} Preprocessed File${count > 1 ? 's' : ''}`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking preprocessed files:', error);
+                    deleteBtn.disabled = true;
+                });
+        }
+
+        function deletePreprocessedFiles() {
+            const profileId = document.getElementById('comparisonProfile').value;
+            const deleteBtn = document.getElementById('deletePreprocessedBtn');
+
+            if (!profileId) {
+                alert('Please select a profile first.');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to delete all preprocessed files? This action cannot be undone.')) {
+                return;
+            }
+
+            deleteBtn.disabled = true;
+            deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
+
+            // Call the backend endpoint to delete preprocessed files
+            fetch(`/api/postprocess/delete-preprocessed/${profileId}`, {
+                method: 'DELETE'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`Preprocessed files deleted successfully! (${data.deleted_count} files)`);
+                        updateDeleteButton();
+                        loadComparisonProfiles(); // Refresh the comparison file list
+                    } else {
+                        throw new Error(data.error || 'Failed to delete files');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting files:', error);
+                    alert('Error deleting files: ' + error.message);
+                    updateDeleteButton();
+                });
+        }
+
         // Load processing history on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadProcessingHistory();
             loadComparisonProfiles();
+            updateDeleteButton();
         });
 
         // Audio Comparison Functions
@@ -725,6 +814,11 @@
         document.getElementById('comparisonFile').addEventListener('change', function() {
             const loadBtn = document.getElementById('loadComparisonBtn');
             loadBtn.disabled = !this.value;
+            updateDeleteButton();
+        });
+
+        document.getElementById('comparisonProfile').addEventListener('change', function() {
+            updateDeleteButton();
         });
 
         async function loadComparison() {
@@ -767,16 +861,18 @@
                     Volume: ${preprocessedStats.dBFS?.toFixed(2)} dBFS
                 `;
                 
-                // Show comparison info
+                // Show comparison info and move to right side
                 const durationChange = preprocessedStats.duration - originalStats.duration;
                 const volumeChange = preprocessedStats.dBFS - originalStats.dBFS;
-                
-                document.getElementById('comparisonInfo').innerHTML = `
+
+                // Show changes in the right side card
+                document.getElementById('changesInfo').innerHTML = `
                     <strong>Changes Applied:</strong><br>
                     Duration: ${durationChange >= 0 ? '+' : ''}${durationChange.toFixed(2)}s<br>
                     Volume: ${volumeChange >= 0 ? '+' : ''}${volumeChange.toFixed(2)} dB<br>
                     Sample Rate: ${originalStats.sample_rate} → ${preprocessedStats.sample_rate} Hz
                 `;
+                document.getElementById('changesAppliedCard').style.display = 'block';
             } catch (error) {
                 console.error('Error loading comparison:', error);
                 alert('Error loading comparison: ' + error.message);

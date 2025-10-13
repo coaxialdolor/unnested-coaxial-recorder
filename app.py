@@ -1992,7 +1992,7 @@ async def get_postprocess_history():
             recent_jobs.append({
                 "job_id": job_id,
                 "profile_name": job["profile_id"],
-                "prompt_list_name": job["prompt_list_id"],
+                "prompt_list_ids": job["prompt_list_ids"],
                 "status": job["status"],
                 "processed_files": job["processed"],
                 "total_files": job["total"],
@@ -2034,27 +2034,59 @@ async def compare_audio_files(profile_id: str, filename: str):
         profile_dir = VOICES_DIR / profile_id
         recordings_dir = profile_dir / "recordings"
         preprocessed_dir = recordings_dir / "preprocessed"
-        
+
         original_path = recordings_dir / filename
         preprocessed_path = preprocessed_dir / filename
-        
+
         if not original_path.exists():
             raise HTTPException(status_code=404, detail="Original file not found")
-        
+
         if not preprocessed_path.exists():
             raise HTTPException(status_code=404, detail="Preprocessed file not found")
-        
+
         # Get audio info for both files
         from utils.audio import get_audio_info
-        
+
         original_stats = get_audio_info(original_path)
         preprocessed_stats = get_audio_info(preprocessed_path)
-        
+
         return {
             "original_url": f"/api/audio/{profile_id}/recordings/{filename}",
             "preprocessed_url": f"/api/audio/{profile_id}/recordings/preprocessed/{filename}",
             "original_stats": original_stats,
             "preprocessed_stats": preprocessed_stats
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/postprocess/delete-preprocessed/{profile_id}")
+async def delete_preprocessed_files(profile_id: str):
+    """Delete all preprocessed files for a profile"""
+    try:
+        profile_dir = VOICES_DIR / profile_id
+        recordings_dir = profile_dir / "recordings"
+        preprocessed_dir = recordings_dir / "preprocessed"
+
+        if not profile_dir.exists():
+            raise HTTPException(status_code=404, detail="Profile not found")
+
+        if not preprocessed_dir.exists():
+            return {"success": True, "message": "No preprocessed files to delete"}
+
+        deleted_count = 0
+        for file_path in preprocessed_dir.glob("*.wav"):
+            try:
+                file_path.unlink()
+                deleted_count += 1
+            except Exception as e:
+                print(f"Error deleting {file_path}: {e}")
+
+        return {
+            "success": True,
+            "message": f"Deleted {deleted_count} preprocessed file(s)",
+            "deleted_count": deleted_count
         }
     except HTTPException:
         raise
@@ -2295,7 +2327,7 @@ async def get_export_history():
             recent_jobs.append({
                 "job_id": job_id,
                 "profile_name": job["profile_id"],
-                "prompt_list_name": job["prompt_list_id"],
+                "prompt_list_ids": job["prompt_list_ids"],
                 "status": job["status"],
                 "exported_files": job["processed"],
                 "total_files": job["total"],

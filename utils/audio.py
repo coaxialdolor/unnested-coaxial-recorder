@@ -4,30 +4,45 @@ Audio processing utilities for Voice Dataset Manager
 import os
 from pathlib import Path
 from pydub import AudioSegment
-from pydub.effects import compress_dyn # Import for compression
+# Import for compression - handle different pydub versions
+try:
+    from pydub.effects import compress_dynamic_range
+    COMPRESS_FUNC = compress_dynamic_range
+except ImportError:
+    try:
+        from pydub.effects import compress_dyn
+        COMPRESS_FUNC = compress_dyn
+    except ImportError:
+        # Fallback for older pydub versions
+        COMPRESS_FUNC = None
 import numpy as np
 import shutil # Added for reliable file copying
 
 def apply_compression(audio_segment: AudioSegment) -> AudioSegment:
     """
     Apply dynamic range compression to an AudioSegment.
-    
+
     This reduces the difference between the loud and quiet parts of the speech.
-    
+
     Args:
         audio_segment: AudioSegment to process
 
     Returns:
         Compressed AudioSegment
     """
+    if COMPRESS_FUNC is None:
+        print("Warning: No compression function available, using simple normalization")
+        # Fallback: use simple peak normalization
+        return audio_segment.normalize()
+
     # Compressor settings common for speech:
     threshold = -20.0  # Start compressing signals above -20 dBFS
     ratio = 4.0        # 4:1 ratio (for every 4dB over the threshold, only 1dB is allowed)
     attack = 5.0       # 5 ms attack time (fast to catch peaks)
     release = 50.0     # 50 ms release time (medium speed)
-    
-    # Note: pydub's compress_dyn uses ffmpeg's 'compand' filter under the hood
-    compressed_audio = compress_dyn(
+
+    # Use the available compression function
+    compressed_audio = COMPRESS_FUNC(
         audio_segment,
         threshold=threshold,
         ratio=ratio,
