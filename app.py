@@ -2900,17 +2900,17 @@ async def discover_checkpoints():
                     relative_path = checkpoint_file.relative_to(Path("."))
                     
                     discovered.append({
-                    "name": checkpoint_file.stem,
-                    "filename": checkpoint_file.name,
-                    "path": str(relative_path).replace("\\", "/"),
-                    "size": f"{size_mb:.1f} MB",
-                    "size_bytes": file_size,
-                    "language": language,
-                    "directory": str(checkpoint_file.parent.relative_to(checkpoints_dir))
-                })
-            except Exception as e:
-                print(f"Error processing checkpoint {checkpoint_file}: {e}")
-                continue
+                        "name": checkpoint_file.stem,
+                        "filename": checkpoint_file.name,
+                        "path": str(relative_path).replace("\\", "/"),
+                        "size": f"{size_mb:.1f} MB",
+                        "size_bytes": file_size,
+                        "language": language,
+                        "directory": str(checkpoint_file.parent.relative_to(checkpoints_dir))
+                    })
+                except Exception as e:
+                    print(f"Error processing checkpoint {checkpoint_file}: {e}")
+                    continue
         
         # Also check for .pt and .pth files
         for ext in ["*.pt", "*.pth"]:
