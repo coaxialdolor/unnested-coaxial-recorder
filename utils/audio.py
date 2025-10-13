@@ -4,13 +4,44 @@ Audio processing utilities for Voice Dataset Manager
 import os
 from pathlib import Path
 from pydub import AudioSegment
+from pydub.effects import compress_dyn # Import for compression
 import numpy as np
+import shutil # Added for reliable file copying
+
+def apply_compression(audio_segment: AudioSegment) -> AudioSegment:
+    """
+    Apply dynamic range compression to an AudioSegment.
+    
+    This reduces the difference between the loud and quiet parts of the speech.
+    
+    Args:
+        audio_segment: AudioSegment to process
+
+    Returns:
+        Compressed AudioSegment
+    """
+    # Compressor settings common for speech:
+    threshold = -20.0  # Start compressing signals above -20 dBFS
+    ratio = 4.0        # 4:1 ratio (for every 4dB over the threshold, only 1dB is allowed)
+    attack = 5.0       # 5 ms attack time (fast to catch peaks)
+    release = 50.0     # 50 ms release time (medium speed)
+    
+    # Note: pydub's compress_dyn uses ffmpeg's 'compand' filter under the hood
+    compressed_audio = compress_dyn(
+        audio_segment,
+        threshold=threshold,
+        ratio=ratio,
+        attack=attack,
+        release=release
+    )
+    return compressed_audio
+
 
 def process_audio(file_path: Path):
     """
     Process audio file:
     - Convert to WAV if needed
-    - Normalize volume
+    - Normalize volume (using PEAK normalization)
     - Trim silence
 
     Args:
@@ -20,15 +51,22 @@ def process_audio(file_path: Path):
         # Load audio file
         audio = AudioSegment.from_file(file_path)
 
-        # Convert to WAV if not already
-        if file_path.suffix.lower() != '.wav':
-            audio = audio.set_frame_rate(22050)  # Standard for Piper
-            audio = audio.set_channels(1)  # Mono
-            audio = audio.set_sample_width(2)  # 16-bit
+        # Convert to WAV if not already (and ensure standard format for voice)
+        audio = audio.set_frame_rate(22050)  # Standard for Piper
+        audio = audio.set_channels(1)  # Mono
+        audio = audio.set_sample_width(2)  # 16-bit
 
-        # Normalize audio (adjust volume)
-        target_dBFS = -20.0
-        change_in_dBFS = target_dBFS - audio.dBFS
+        # Normalize audio (adjust volume using PEAK normalization to avoid clipping)
+        target_peak_dBFS = -1.0 # Target peak at -1 dBFS
+        current_peak_dBFS = audio.max_dBFS
+        
+        # Calculate gain, ensuring we don't apply massive gain to silent files
+        if current_peak_dBFS > -90.0:
+            change_in_dBFS = target_peak_dBFS - current_peak_dBFS
+        else:
+            # For near-silent files, apply a default gain (e.g., from -15 dBFS to -1 dBFS)
+            change_in_dBFS = target_peak_dBFS - (-15.0) 
+            
         normalized_audio = audio.apply_gain(change_in_dBFS)
 
         # Trim silence
@@ -42,25 +80,26 @@ def process_audio(file_path: Path):
         print(f"Error processing audio: {e}")
         return False
 
-def trim_silence(audio, silence_threshold=-40, min_silence_len=100, silence_padding=200):
+def trim_silence(audio: AudioSegment, silence_threshold=-40, min_silence_len=100, silence_padding=200) -> AudioSegment:
     """
     Trim silence from the beginning and end of an audio segment and add consistent padding
 
     Args:
         audio: AudioSegment to process
         silence_threshold: silence threshold in dB
-        min_silence_len: minimum silence length in ms
+        min_silence_len: minimum silence length in ms (not used in current detect_leading_silence, but kept for signature)
         silence_padding: padding to add at start and end in ms
 
     Returns:
         Trimmed AudioSegment with consistent padding
     """
-    def detect_leading_silence(sound, silence_threshold, chunk_size=10):
+    def detect_leading_silence(sound: AudioSegment, silence_threshold: int, chunk_size=10) -> int:
         """
         Detect silence at the beginning of a sound file
         """
         trim_ms = 0
         while trim_ms < len(sound):
+            # Check the average volume (dBFS) of a small chunk
             if sound[trim_ms:trim_ms+chunk_size].dBFS < silence_threshold:
                 trim_ms += chunk_size
             else:
@@ -72,7 +111,7 @@ def trim_silence(audio, silence_threshold=-40, min_silence_len=100, silence_padd
 
     # Ensure we don't trim too much
     if start_trim + end_trim >= len(audio):
-        # If the entire audio would be trimmed, return a small portion
+        # If the entire audio would be trimmed, return a small portion or the original
         if len(audio) > 100:
             trimmed_audio = audio[len(audio)//3:2*len(audio)//3]
         else:
@@ -86,15 +125,9 @@ def trim_silence(audio, silence_threshold=-40, min_silence_len=100, silence_padd
 
     return final_audio
 
-def get_audio_duration(file_path):
+def get_audio_duration(file_path: Path) -> float:
     """
     Get the duration of an audio file in seconds
-
-    Args:
-        file_path: Path to the audio file
-
-    Returns:
-        Duration in seconds
     """
     try:
         audio = AudioSegment.from_file(file_path)
@@ -103,16 +136,17 @@ def get_audio_duration(file_path):
         print(f"Error getting audio duration: {e}")
         return 0
 
-def process_audio_enhanced(file_path: Path, silence_threshold=-40, target_volume=-20, silence_padding=200, create_backup=True):
+def process_audio_enhanced(file_path: Path, silence_threshold=-40, target_peak_volume=-1, silence_padding=200, create_backup=True, apply_comp=True) -> tuple[bool, float, float]:
     """
-    Enhanced audio processing with configurable parameters
-
+    Enhanced audio processing with configurable parameters (uses Peak Normalization).
+    
     Args:
         file_path: Path to the audio file
         silence_threshold: Silence threshold in dB
-        target_volume: Target volume in dB
+        target_peak_volume: Target peak volume in dBFS (e.g., -1 to avoid clipping) <--- CHANGED
         silence_padding: Padding to add at start and end in ms
         create_backup: Whether to create a backup of the original file
+        apply_comp: Whether to apply dynamic range compression
 
     Returns:
         Tuple of (success: bool, original_duration: float, new_duration: float)
@@ -125,21 +159,29 @@ def process_audio_enhanced(file_path: Path, silence_threshold=-40, target_volume
                 import shutil
                 shutil.copy2(file_path, backup_path)
 
-        # Load audio file
+        # Load audio file and standardize format
         audio = AudioSegment.from_file(file_path)
         original_duration = len(audio) / 1000.0
+        
+        audio = audio.set_frame_rate(22050)  # Standard for Piper
+        audio = audio.set_channels(1)  # Mono
+        audio = audio.set_sample_width(2)  # 16-bit
 
-        # Convert to WAV if not already
-        if file_path.suffix.lower() != '.wav':
-            audio = audio.set_frame_rate(22050)  # Standard for Piper
-            audio = audio.set_channels(1)  # Mono
-            audio = audio.set_sample_width(2)  # 16-bit
+        # 1. Apply Compression (to make the lows louder)
+        if apply_comp:
+            audio = apply_compression(audio)
 
-        # Normalize audio (adjust volume)
-        change_in_dBFS = target_volume - audio.dBFS
+        # 2. Peak Normalization (to set the final maximum volume and apply makeup gain)
+        current_peak_dBFS = audio.max_dBFS
+        
+        if current_peak_dBFS > -90.0:
+            change_in_dBFS = target_peak_volume - current_peak_dBFS
+        else:
+            change_in_dBFS = target_peak_volume - (-15.0) 
+        
         normalized_audio = audio.apply_gain(change_in_dBFS)
 
-        # Trim silence and add padding
+        # 3. Trim silence and add padding
         processed_audio = trim_silence(normalized_audio, silence_threshold, silence_padding=silence_padding)
 
         # Export processed audio
@@ -151,18 +193,21 @@ def process_audio_enhanced(file_path: Path, silence_threshold=-40, target_volume
         print(f"Error processing audio {file_path}: {e}")
         return False, 0, 0
 
-def process_audio_enhanced_with_sample_rate(file_path: Path, output_path: Path = None, silence_threshold=-40, target_volume=-6, target_sample_rate=44100, silence_padding=200, create_backup=True):
+def process_audio_enhanced_with_sample_rate(file_path: Path, output_path: Path = None, silence_threshold=-40, target_peak_volume=-1, target_sample_rate=44100, silence_padding=200, create_backup=True, apply_comp=True) -> tuple[bool, float, float]:
     """
-    Enhanced audio processing with configurable parameters including sample rate conversion
+    Enhanced audio processing with configurable parameters including sample rate conversion.
+    
+    MODIFICATION: Uses Compression + Peak Normalization to make lows louder without clipping peaks.
 
     Args:
         file_path: Path to the input audio file
         output_path: Path to save the processed file (if None, overwrites input file)
         silence_threshold: Silence threshold in dB
-        target_volume: Target volume in dB
+        target_peak_volume: Target peak volume in dBFS (e.g., -1 to avoid clipping) <--- CHANGED
         target_sample_rate: Target sample rate in Hz
         silence_padding: Padding to add at start and end in ms
         create_backup: Whether to create a backup of the original file
+        apply_comp: Whether to apply dynamic range compression <--- NEW
 
     Returns:
         Tuple of (success: bool, original_duration: float, new_duration: float)
@@ -179,7 +224,7 @@ def process_audio_enhanced_with_sample_rate(file_path: Path, output_path: Path =
                 import shutil
                 shutil.copy2(file_path, backup_path)
 
-        # Load audio file
+        # Load audio file and standardize format
         audio = AudioSegment.from_file(file_path)
         original_duration = len(audio) / 1000.0
 
@@ -187,12 +232,23 @@ def process_audio_enhanced_with_sample_rate(file_path: Path, output_path: Path =
         audio = audio.set_frame_rate(target_sample_rate)
         audio = audio.set_channels(1)  # Mono
         audio = audio.set_sample_width(2)  # 16-bit
+        
+        # 1. Apply Compression (to make the lows louder)
+        if apply_comp:
+            audio = apply_compression(audio)
 
-        # Normalize audio (adjust volume)
-        change_in_dBFS = target_volume - audio.dBFS
+        # 2. Peak Normalization (to set the final maximum volume and apply makeup gain)
+        current_peak_dBFS = audio.max_dBFS
+        
+        if current_peak_dBFS > -90.0:
+            change_in_dBFS = target_peak_volume - current_peak_dBFS
+        else:
+            # For near-silent files, apply a default gain (e.g., from -15 dBFS to -1 dBFS)
+            change_in_dBFS = target_peak_volume - (-15.0) 
+            
         normalized_audio = audio.apply_gain(change_in_dBFS)
 
-        # Trim silence and add padding
+        # 3. Trim silence and add padding
         processed_audio = trim_silence(normalized_audio, silence_threshold, silence_padding=silence_padding)
 
         # Export processed audio to output path
@@ -207,12 +263,6 @@ def process_audio_enhanced_with_sample_rate(file_path: Path, output_path: Path =
 def get_audio_info(file_path: Path):
     """
     Get comprehensive audio file information
-
-    Args:
-        file_path: Path to the audio file
-
-    Returns:
-        Dictionary with audio information
     """
     try:
         audio = AudioSegment.from_file(file_path)
@@ -232,20 +282,9 @@ def get_audio_info(file_path: Path):
         print(f"Error getting audio info for {file_path}: {e}")
         return None
 
-def batch_process_audio(directory: Path, silence_threshold=-40, target_volume=-20, silence_padding=200, create_backup=True, progress_callback=None):
+def batch_process_audio(directory: Path, silence_threshold=-40, target_peak_volume=-1, silence_padding=200, create_backup=True, progress_callback=None):
     """
-    Process multiple audio files in a directory
-
-    Args:
-        directory: Directory containing audio files
-        silence_threshold: Silence threshold in dB
-        target_volume: Target volume in dB
-        silence_padding: Padding to add at start and end in ms
-        create_backup: Whether to create backups
-        progress_callback: Function to call with progress updates (current, total, current_file)
-
-    Returns:
-        Dictionary with processing results
+    Process multiple audio files in a directory (Updated for Peak Normalization)
     """
     audio_files = list(directory.glob("*.wav"))
     total_files = len(audio_files)
@@ -258,8 +297,9 @@ def batch_process_audio(directory: Path, silence_threshold=-40, target_volume=-2
         if progress_callback:
             progress_callback(i, total_files, file_path.name)
 
+        # Calls the enhanced function which now uses Peak Normalization
         success, original_duration, new_duration = process_audio_enhanced(
-            file_path, silence_threshold, target_volume, silence_padding, create_backup
+            file_path, silence_threshold, target_peak_volume, silence_padding, create_backup
         )
 
         if success:
@@ -280,19 +320,7 @@ def batch_process_audio(directory: Path, silence_threshold=-40, target_volume=-2
 
 def export_audio_file(input_path: Path, output_dir: Path, format="wav", sample_rate=44100, bit_depth=16, channels=1, mp3_bitrate="192"):
     """
-    Export an audio file in the specified format and settings
-
-    Args:
-        input_path: Path to the input audio file
-        output_dir: Directory to save the exported file
-        format: Output format (wav, mp3, flac, ogg)
-        sample_rate: Sample rate in Hz
-        bit_depth: Bit depth (16, 24, 32)
-        channels: Number of channels (1 for mono, 2 for stereo)
-        mp3_bitrate: MP3 bitrate in kbps (only used for MP3 format)
-
-    Returns:
-        Tuple of (success: bool, output_path: Path)
+    Export an audio file in the specified format and settings (No change needed here)
     """
     try:
         # Load audio file
