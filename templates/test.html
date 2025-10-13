@@ -81,6 +81,24 @@
                             </div>
 
                             <div class="mb-3">
+                                <label for="customCheckpoint" class="form-label">
+                                    Or Use Custom Checkpoint 
+                                    <span class="badge bg-info">Browse</span>
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="customCheckpoint" placeholder="checkpoints/sv-SE/my-model.ckpt">
+                                    <input type="file" id="customCheckpointPicker" accept=".ckpt,.pt,.pth" style="display: none;" onchange="handleCustomCheckpointSelect(this)">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('customCheckpointPicker').click()">
+                                        <i class="fas fa-folder-open"></i> Browse
+                                    </button>
+                                    <button class="btn btn-outline-primary" type="button" onclick="useCustomCheckpoint()">
+                                        <i class="fas fa-check"></i> Use
+                                    </button>
+                                </div>
+                                <div class="form-text">Browse for a local checkpoint file or enter path manually</div>
+                            </div>
+
+                            <div class="mb-3">
                                 <label for="testText" class="form-label">Text to Synthesize</label>
                                 <textarea class="form-control" id="testText" name="testText" rows="4"
                                     placeholder="Enter the text you want to convert to speech...">Hello! This is a test of the voice synthesis system. How does this sound?</textarea>
@@ -273,29 +291,130 @@
                 return;
             }
 
-            fetch(`/api/checkpoints/${language}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+            // Load both predefined and discovered checkpoints
+            Promise.all([
+                fetch(`/api/checkpoints/${language}`).then(r => r.json()),
+                fetch(`/api/test/discover-checkpoints`).then(r => r.json())
+            ])
+            .then(([predefinedData, discoveredData]) => {
+                voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
 
-                        data.checkpoints.forEach(voice => {
-                            const option = document.createElement('option');
-                            option.value = voice.voice_id;
-                            option.textContent = `${voice.name} (${voice.gender}, ${voice.quality})`;
-                            if (voice.downloaded) {
-                                option.textContent += ' ✓';
-                            }
-                            voiceSelect.appendChild(option);
-                        });
-
-                        voiceSelect.disabled = false;
-                        updateVoiceInfo();
-                    } else {
-                        console.error('Error loading voices:', data.error);
+                // Add predefined checkpoints
+                if (predefinedData.success && predefinedData.checkpoints) {
+                    const predefinedGroup = document.createElement('optgroup');
+                    predefinedGroup.label = 'Pre-defined Models';
+                    
+                    predefinedData.checkpoints.forEach(voice => {
+                        const option = document.createElement('option');
+                        option.value = voice.voice_id;
+                        option.textContent = `${voice.name} (${voice.gender}, ${voice.quality})`;
+                        if (voice.downloaded) {
+                            option.textContent += ' ✓';
+                        }
+                        predefinedGroup.appendChild(option);
+                    });
+                    
+                    if (predefinedGroup.children.length > 0) {
+                        voiceSelect.appendChild(predefinedGroup);
                     }
-                })
-                .catch(error => console.error('Error loading voices:', error));
+                }
+
+                // Add discovered checkpoints
+                if (discoveredData.success && discoveredData.checkpoints) {
+                    const discovered = discoveredData.checkpoints.filter(c => {
+                        return !language || c.language === language || c.language === 'unknown';
+                    });
+
+                    if (discovered.length > 0) {
+                        const discoveredGroup = document.createElement('optgroup');
+                        discoveredGroup.label = 'Discovered Local Models';
+                        
+                        discovered.forEach(checkpoint => {
+                            const option = document.createElement('option');
+                            option.value = `custom:${checkpoint.path}`;
+                            option.textContent = `${checkpoint.name} (${checkpoint.size})`;
+                            option.setAttribute('data-custom', 'true');
+                            option.setAttribute('data-path', checkpoint.path);
+                            discoveredGroup.appendChild(option);
+                        });
+                        
+                        voiceSelect.appendChild(discoveredGroup);
+                    }
+                }
+
+                voiceSelect.disabled = false;
+                updateVoiceInfo();
+            })
+            .catch(error => {
+                console.error('Error loading voices:', error);
+                voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+                voiceSelect.disabled = true;
+            });
+        }
+
+        function handleCustomCheckpointSelect(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const pathInput = document.getElementById('customCheckpoint');
+                
+                // Try to get full path (won't work in most browsers due to security)
+                const fullPath = file.path || file.webkitRelativePath || file.name;
+                
+                // If we got just the filename, suggest the checkpoints directory
+                if (fullPath === file.name) {
+                    // Guess checkpoint location based on filename
+                    if (file.name.includes('sv-') || file.name.includes('swedish')) {
+                        pathInput.value = `checkpoints/sv-SE/${file.name}`;
+                    } else if (file.name.includes('en-')) {
+                        pathInput.value = `checkpoints/en-US/${file.name}`;
+                    } else {
+                        pathInput.value = `checkpoints/${file.name}`;
+                    }
+                    
+                    alert(`Selected: ${file.name}\n\nSuggested path: ${pathInput.value}\n\nClick "Use" to load this checkpoint, or edit the path if needed.`);
+                } else {
+                    // We got a full path (Electron, some desktop browsers)
+                    pathInput.value = fullPath.replace(/\\/g, '/'); // Convert Windows paths
+                }
+            }
+        }
+
+        function useCustomCheckpoint() {
+            const customPath = document.getElementById('customCheckpoint').value.trim();
+            if (!customPath) {
+                alert('Please enter or browse for a checkpoint file.');
+                return;
+            }
+
+            // Set it as the current voice
+            const voiceSelect = document.getElementById('voice');
+            
+            // Check if option already exists
+            let option = Array.from(voiceSelect.options).find(opt => opt.value === `custom:${customPath}`);
+            
+            if (!option) {
+                // Add new option for this custom checkpoint
+                option = document.createElement('option');
+                option.value = `custom:${customPath}`;
+                option.textContent = `Custom: ${customPath.split('/').pop()}`;
+                option.setAttribute('data-custom', 'true');
+                option.setAttribute('data-path', customPath);
+                voiceSelect.appendChild(option);
+            }
+            
+            // Select this option
+            voiceSelect.value = option.value;
+            voiceSelect.disabled = false;
+            
+            // Update voice info
+            document.getElementById('voiceInfo').innerHTML = `
+                <div class="alert alert-info">
+                    <strong>Custom Checkpoint:</strong> ${customPath}<br>
+                    <small>This checkpoint will be used for voice synthesis</small>
+                </div>
+            `;
+            
+            alert(`Custom checkpoint loaded: ${customPath}\n\nYou can now generate speech with this model.`);
         }
 
         function updateVoiceInfo() {

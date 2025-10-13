@@ -477,7 +477,8 @@
                                 if (data.download_url) {
                                     window.location.href = data.download_url;
                                 }
-                                alert('Export completed successfully!');
+                                const localPath = data.local_export_path || 'voices/{profile}/Exported datasets/';
+                                alert(`Export completed successfully!\n\n📥 Browser download started\n📁 Local copy saved to:\n${localPath}`);
                                 loadExportHistory();
                             } else {
                                 alert('Export failed: ' + (data.error || 'Unknown error'));

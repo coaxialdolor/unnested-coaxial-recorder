@@ -168,11 +168,72 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-terminal me-2"></i>Processing Console
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="consoleOutput" class="bg-dark text-light p-3" style="font-family: monospace; font-size: 0.85em; max-height: 400px; overflow-y: auto; display: none;">
+                            <div class="text-center text-muted">
+                                Waiting for processing to start...
+                            </div>
+                        </div>
+                        <div id="noConsole" class="text-center text-muted p-3">
+                            <i class="fas fa-info-circle me-2"></i>Console output will appear here during processing
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="row mt-4">
-            <div class="col-12">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-balance-scale me-2"></i>Audio Comparison Tool
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="comparisonProfile" class="form-label">Voice Profile</label>
+                            <select class="form-select" id="comparisonProfile">
+                                <option value="">Select a voice profile...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="comparisonFile" class="form-label">Select File to Compare</label>
+                            <select class="form-select" id="comparisonFile">
+                                <option value="">Select a file...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary w-100" id="loadComparisonBtn" onclick="loadComparison()" disabled>
+                            <i class="fas fa-play me-2"></i>Load Comparison
+                        </button>
+                        
+                        <div id="comparisonContainer" class="mt-4" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-microphone me-2"></i>Original</h6>
+                                    <audio id="originalAudio" controls class="w-100 mb-2"></audio>
+                                    <div id="originalStats" class="small text-muted"></div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-waveform-lines me-2"></i>Preprocessed</h6>
+                                    <audio id="preprocessedAudio" controls class="w-100 mb-2"></audio>
+                                    <div id="preprocessedStats" class="small text-muted"></div>
+                                </div>
+                            </div>
+                            <div class="alert alert-info mt-3" id="comparisonInfo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
                 <div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">
@@ -402,18 +463,28 @@
         }
 
         function startProgressTracking() {
+            // Show console output
+            document.getElementById('consoleOutput').style.display = 'block';
+            document.getElementById('noConsole').style.display = 'none';
+            
             progressInterval = setInterval(() => {
                 fetch(`/api/postprocess/status/${currentProcessingJob}`)
                     .then(response => response.json())
                     .then(data => {
                         updateProgress(data);
+                        updateConsole(data);
 
-                        if (data.status === 'completed' || data.status === 'failed') {
+                        if (data.status === 'completed' || data.status === 'failed' || data.status === 'partial') {
                             clearInterval(progressInterval);
                             resetProcessingButton();
 
                             if (data.status === 'completed') {
-                                alert('Processing completed successfully!');
+                                const summary = `Processing completed successfully!\n\n✅ Successful: ${data.successful || data.total}\n📁 Output: ${data.output_location || 'recordings/preprocessed/'}`;
+                                alert(summary);
+                                loadProcessingHistory();
+                            } else if (data.status === 'partial') {
+                                const summary = `Processing completed with some failures:\n\n✅ Successful: ${data.successful}\n❌ Failed: ${data.failed}\n📁 Output: ${data.output_location || 'recordings/preprocessed/'}`;
+                                alert(summary);
                                 loadProcessingHistory();
                             } else {
                                 alert('Processing failed: ' + (data.error || 'Unknown error'));
@@ -435,11 +506,26 @@
             const percentage = Math.round((data.processed / data.total) * 100);
 
             progressBar.style.width = percentage + '%';
-            progressText.textContent = `${data.processed} / ${data.total} files processed`;
+            
+            // Update text to show success/fail counts if available
+            if (data.successful !== undefined && data.failed !== undefined) {
+                progressText.textContent = `${data.processed} / ${data.total} files (✅ ${data.successful} ❌ ${data.failed})`;
+            } else {
+                progressText.textContent = `${data.processed} / ${data.total} files processed`;
+            }
+            
             progressPercent.textContent = percentage + '%';
 
             if (data.current_file) {
                 currentFile.textContent = `Processing: ${data.current_file}`;
+            }
+        }
+
+        function updateConsole(data) {
+            const consoleOutput = document.getElementById('consoleOutput');
+            if (data.console_output && data.console_output.length > 0) {
+                consoleOutput.innerHTML = data.console_output.map(line => `<div>${line}</div>`).join('');
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
             }
         }
 
@@ -513,7 +599,117 @@
         // Load processing history on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadProcessingHistory();
+            loadComparisonProfiles();
         });
+
+        // Audio Comparison Functions
+        function loadComparisonProfiles() {
+            fetch('/api/profiles')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('comparisonProfile');
+                    select.innerHTML = '<option value="">Select a voice profile...</option>';
+                    data.forEach(profile => {
+                        const option = document.createElement('option');
+                        option.value = profile.id;
+                        option.textContent = profile.name;
+                        select.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading profiles:', error));
+        }
+
+        document.getElementById('comparisonProfile').addEventListener('change', function() {
+            const profileId = this.value;
+            const fileSelect = document.getElementById('comparisonFile');
+            const loadBtn = document.getElementById('loadComparisonBtn');
+            
+            if (!profileId) {
+                fileSelect.innerHTML = '<option value="">Select a file...</option>';
+                loadBtn.disabled = true;
+                return;
+            }
+
+            // Load files with preprocessed versions
+            fetch(`/api/postprocess/comparison-files/${profileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    fileSelect.innerHTML = '<option value="">Select a file...</option>';
+                    data.forEach(file => {
+                        const option = document.createElement('option');
+                        option.value = file.filename;
+                        option.textContent = file.filename + (file.has_preprocessed ? ' ✓' : ' (no preprocessed)');
+                        option.disabled = !file.has_preprocessed;
+                        fileSelect.appendChild(option);
+                    });
+                    loadBtn.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error loading files:', error);
+                    loadBtn.disabled = true;
+                });
+        });
+
+        document.getElementById('comparisonFile').addEventListener('change', function() {
+            const loadBtn = document.getElementById('loadComparisonBtn');
+            loadBtn.disabled = !this.value;
+        });
+
+        async function loadComparison() {
+            const profileId = document.getElementById('comparisonProfile').value;
+            const filename = document.getElementById('comparisonFile').value;
+            
+            if (!profileId || !filename) return;
+
+            try {
+                const response = await fetch(`/api/postprocess/compare/${profileId}/${filename}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                // Show comparison container
+                document.getElementById('comparisonContainer').style.display = 'block';
+                
+                // Load audio files
+                document.getElementById('originalAudio').src = data.original_url;
+                document.getElementById('preprocessedAudio').src = data.preprocessed_url;
+                
+                // Display statistics
+                const originalStats = data.original_stats;
+                const preprocessedStats = data.preprocessed_stats;
+                
+                document.getElementById('originalStats').innerHTML = `
+                    Duration: ${originalStats.duration?.toFixed(2)}s<br>
+                    Sample Rate: ${originalStats.sample_rate} Hz<br>
+                    Channels: ${originalStats.channels}<br>
+                    Volume: ${originalStats.dBFS?.toFixed(2)} dBFS
+                `;
+                
+                document.getElementById('preprocessedStats').innerHTML = `
+                    Duration: ${preprocessedStats.duration?.toFixed(2)}s<br>
+                    Sample Rate: ${preprocessedStats.sample_rate} Hz<br>
+                    Channels: ${preprocessedStats.channels}<br>
+                    Volume: ${preprocessedStats.dBFS?.toFixed(2)} dBFS
+                `;
+                
+                // Show comparison info
+                const durationChange = preprocessedStats.duration - originalStats.duration;
+                const volumeChange = preprocessedStats.dBFS - originalStats.dBFS;
+                
+                document.getElementById('comparisonInfo').innerHTML = `
+                    <strong>Changes Applied:</strong><br>
+                    Duration: ${durationChange >= 0 ? '+' : ''}${durationChange.toFixed(2)}s<br>
+                    Volume: ${volumeChange >= 0 ? '+' : ''}${volumeChange.toFixed(2)} dB<br>
+                    Sample Rate: ${originalStats.sample_rate} → ${preprocessedStats.sample_rate} Hz
+                `;
+            } catch (error) {
+                console.error('Error loading comparison:', error);
+                alert('Error loading comparison: ' + error.message);
+            }
+        }
     </script>
 </body>
 </html>

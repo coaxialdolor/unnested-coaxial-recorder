@@ -97,9 +97,9 @@ def check_dependencies():
 
     return True
 
-def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, language_code: str = "en-US") -> Dict:
+def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, language_code: str = "en-US", audio_source: str = "original") -> Dict:
     """Prepare dataset for training with phoneme and MFA support"""
-    logging.info(f"Preparing dataset for profile: {profile_id}, prompt list: {prompt_list_id}, language: {language_code}")
+    logging.info(f"Preparing dataset for profile: {profile_id}, prompt list: {prompt_list_id}, language: {language_code}, audio_source: {audio_source}")
 
     # Initialize phoneme and MFA systems
     phoneme_manager = get_phoneme_manager()
@@ -119,6 +119,7 @@ def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, langu
         "prompt_list_id": prompt_list_id,
         "output_dir": output_dir,
         "language_code": language_code,
+        "audio_source": audio_source,
         "audio_files": [],
         "transcripts": [],
         "phonemes": [],
@@ -129,8 +130,15 @@ def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, langu
         "mfa_language": lang_config.get("mfa_language")
     }
 
-    # Check if recordings exist
-    recordings_dir = Path("voices") / profile_id / "recordings"
+    # Determine which directory to use based on audio_source
+    base_recordings_dir = Path("voices") / profile_id / "recordings"
+    if audio_source == "preprocessed":
+        recordings_dir = base_recordings_dir / "preprocessed"
+        logging.info(f"Using preprocessed audio from: {recordings_dir}")
+    else:
+        recordings_dir = base_recordings_dir
+        logging.info(f"Using original audio from: {recordings_dir}")
+    
     if not recordings_dir.exists():
         logging.error(f"Recordings directory not found: {recordings_dir}")
         return dataset_info

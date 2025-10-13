@@ -151,12 +151,13 @@ def process_audio_enhanced(file_path: Path, silence_threshold=-40, target_volume
         print(f"Error processing audio {file_path}: {e}")
         return False, 0, 0
 
-def process_audio_enhanced_with_sample_rate(file_path: Path, silence_threshold=-40, target_volume=-6, target_sample_rate=44100, silence_padding=200, create_backup=True):
+def process_audio_enhanced_with_sample_rate(file_path: Path, output_path: Path = None, silence_threshold=-40, target_volume=-6, target_sample_rate=44100, silence_padding=200, create_backup=True):
     """
     Enhanced audio processing with configurable parameters including sample rate conversion
 
     Args:
-        file_path: Path to the audio file
+        file_path: Path to the input audio file
+        output_path: Path to save the processed file (if None, overwrites input file)
         silence_threshold: Silence threshold in dB
         target_volume: Target volume in dB
         target_sample_rate: Target sample rate in Hz
@@ -167,8 +168,12 @@ def process_audio_enhanced_with_sample_rate(file_path: Path, silence_threshold=-
         Tuple of (success: bool, original_duration: float, new_duration: float)
     """
     try:
-        # Create backup if requested
-        if create_backup:
+        # If no output path specified, use input path (overwrite)
+        if output_path is None:
+            output_path = file_path
+        
+        # Create backup if requested and overwriting
+        if create_backup and output_path == file_path:
             backup_path = file_path.with_suffix('.wav.backup')
             if not backup_path.exists():
                 import shutil
@@ -190,8 +195,8 @@ def process_audio_enhanced_with_sample_rate(file_path: Path, silence_threshold=-
         # Trim silence and add padding
         processed_audio = trim_silence(normalized_audio, silence_threshold, silence_padding=silence_padding)
 
-        # Export processed audio
-        processed_audio.export(file_path, format="wav")
+        # Export processed audio to output path
+        processed_audio.export(output_path, format="wav")
         new_duration = len(processed_audio) / 1000.0
 
         return True, original_duration, new_duration

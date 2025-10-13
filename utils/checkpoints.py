@@ -15,6 +15,14 @@ import shutil
 from urllib.parse import urlparse
 import time
 
+# Optional dependency for checkpoint validation
+try:
+    import torch  # type: ignore
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -90,16 +98,32 @@ class CheckpointManager:
             },
             "sv-SE": {
                 "nst": {
-                    "name": "NST",
+                    "name": "NST (Requires Manual Download)",
                     "gender": "Female",
                     "dataset": "NST Swedish",
                     "quality": "Medium",
-                    "url": "https://huggingface.co/KBLab/piper-tts-nst-swedish/resolve/main/epoch%3D1000-step%3D3493434.ckpt",
-                    "config_url": "https://huggingface.co/KBLab/piper-tts-nst-swedish/resolve/main/config.json",
+                    "url": None,  # Not directly downloadable - requires HuggingFace login
+                    "config_url": None,
                     "phoneme_type": "sv-se-mfa",
                     "sample_rate": 22050,
                     "speaker_id": 0,
-                    "description": "Swedish female voice from NST dataset"
+                    "description": "Swedish female voice from NST dataset",
+                    "manual_download_url": "https://huggingface.co/KBLab/piper-tts-nst-swedish",
+                    "manual_instructions": "1. Visit https://huggingface.co/KBLab/piper-tts-nst-swedish\n2. Download the .ckpt file\n3. Save to: checkpoints/sv-SE/nst/\n4. Or use Custom Checkpoint Path field"
+                },
+                "multispeaker": {
+                    "name": "SubZeroAI Multi-Speaker",
+                    "gender": "Multiple",
+                    "dataset": "Swedish Multi-Speaker",
+                    "quality": "High",
+                    "url": None,
+                    "config_url": None,
+                    "phoneme_type": "sv-se-mfa",
+                    "sample_rate": 22050,
+                    "speaker_id": 0,
+                    "description": "Swedish multi-speaker TTS model",
+                    "manual_download_url": "https://huggingface.co/SubZeroAI/piper-swedish-tts-multispeaker",
+                    "manual_instructions": "1. Visit https://huggingface.co/SubZeroAI/piper-swedish-tts-multispeaker\n2. Download the .ckpt file\n3. Save to: checkpoints/sv-SE/multispeaker/\n4. Or use Custom Checkpoint Path field"
                 }
             },
             "it-IT": {
@@ -190,6 +214,10 @@ class CheckpointManager:
             return self.download_checkpoint(fallback_lang, fallback_voice, progress_callback)
 
         if not config["url"]:
+            # Check if manual download instructions are available
+            if config.get("manual_instructions"):
+                manual_msg = f"MANUAL DOWNLOAD REQUIRED:\n\n{config['manual_instructions']}\n\nURL: {config.get('manual_download_url', 'Not provided')}"
+                return False, manual_msg
             return False, f"No download URL available for {language_code}.{voice_id}"
 
         # Check if already downloaded
@@ -280,7 +308,10 @@ class CheckpointManager:
                 return False
 
             # Try to load the checkpoint (basic validation)
-            import torch
+            if not TORCH_AVAILABLE:
+                logger.warning("PyTorch not available, skipping checkpoint validation")
+                return True  # Assume valid if we can't validate
+            
             try:
                 checkpoint = torch.load(checkpoint_path, map_location='cpu')
                 if not isinstance(checkpoint, dict):

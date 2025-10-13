@@ -116,6 +116,13 @@
 
                             <!-- Checkpoint Selection (only for fine-tuning) -->
                             <div id="checkpointSelection" class="mt-3" style="display: none;">
+                                <div class="alert alert-info">
+                                    <strong><i class="fas fa-info-circle me-1"></i>Checkpoint Options:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li><strong>Pre-trained Base Voice:</strong> Select from available models. Some require manual download.</li>
+                                        <li><strong>Custom Checkpoint Path:</strong> Use for manually downloaded checkpoints or local files. Leave dropdown empty when using custom path.</li>
+                                    </ul>
+                                </div>
                                 <div class="row">
                                     <div class="col-md-6">
                                         <label for="baseVoice" class="form-label">Pre-trained Base Voice</label>
@@ -123,19 +130,23 @@
                                             <option value="">Select a base voice...</option>
                                         </select>
                                         <div class="parameter-help mt-1">
-                                            Choose a pre-trained voice model to fine-tune from
+                                            Select from catalog (some may require manual download)
                                         </div>
                                     </div>
                                     <div class="col-md-6">
-                                        <label for="checkpointPath" class="form-label">Custom Checkpoint Path</label>
+                                        <label for="checkpointPath" class="form-label">
+                                            Custom Checkpoint Path 
+                                            <span class="badge bg-warning text-dark">For Manual Downloads</span>
+                                        </label>
                                         <div class="input-group">
-                                            <input type="text" class="form-control" id="checkpointPath" placeholder="/path/to/checkpoint.ckpt">
-                                            <button class="btn btn-outline-secondary" type="button" onclick="browseCheckpoint()">
+                                            <input type="text" class="form-control" id="checkpointPath" placeholder="checkpoints/sv-SE/nst/model.ckpt">
+                                            <input type="file" id="checkpointFilePicker" accept=".ckpt,.pt,.pth" style="display: none;" onchange="handleCheckpointFileSelect(this)">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('checkpointFilePicker').click()">
                                                 <i class="fas fa-folder-open"></i> Browse
                                             </button>
                                         </div>
                                         <div class="parameter-help mt-1">
-                                            Or specify a custom checkpoint file path
+                                            Path to your manually downloaded checkpoint file. Click Browse to select, or type path manually. Leave "Pre-trained Base Voice" empty when using this.
                                         </div>
                                     </div>
                                 </div>
@@ -173,6 +184,33 @@
                                         <option value="">Select prompt lists...</option>
                                     </select>
                                     <small class="form-text text-muted">Hold Ctrl/Cmd for multiple</small>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <label class="form-label">Audio Source</label>
+                                    <div class="d-flex gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="audioSource" id="audioSourceOriginal" value="original" checked>
+                                            <label class="form-check-label" for="audioSourceOriginal">
+                                                <strong>Original Recordings</strong>
+                                                <span id="originalCount" class="badge bg-secondary ms-1">0 files</span>
+                                            </label>
+                                            <div class="parameter-help mt-1">
+                                                Use the original, unprocessed recordings
+                                            </div>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="audioSource" id="audioSourcePreprocessed" value="preprocessed">
+                                            <label class="form-check-label" for="audioSourcePreprocessed">
+                                                <strong>Preprocessed Recordings</strong>
+                                                <span id="preprocessedCount" class="badge bg-secondary ms-1">0 files</span>
+                                            </label>
+                                            <div class="parameter-help mt-1">
+                                                Use processed recordings with normalized volume and trimmed silence
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="row mt-3">
@@ -521,6 +559,7 @@
             const profileId = document.getElementById('voiceProfile').value;
             if (!profileId) {
                 document.getElementById('promptList').innerHTML = '<option value="">Select a prompt list...</option>';
+                updateFileCounts();
                 return;
             }
 
@@ -535,8 +574,44 @@
                         option.textContent = dataset.display_name;
                         select.appendChild(option);
                     });
+                    updateFileCounts();
                 })
                 .catch(error => console.error('Error loading prompt lists:', error));
+        }
+
+        async function updateFileCounts() {
+            const profileId = document.getElementById('voiceProfile').value;
+            const promptListSelect = document.getElementById('promptList');
+            const selectedOptions = Array.from(promptListSelect.selectedOptions).map(opt => opt.value).filter(v => v);
+            
+            if (!profileId || selectedOptions.length === 0) {
+                document.getElementById('originalCount').textContent = '0 files';
+                document.getElementById('preprocessedCount').textContent = '0 files';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/train/file-counts/${profileId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt_list_ids: selectedOptions })
+                });
+                const data = await response.json();
+                
+                document.getElementById('originalCount').textContent = `${data.original_count || 0} files`;
+                document.getElementById('preprocessedCount').textContent = `${data.preprocessed_count || 0} files`;
+                
+                // Disable preprocessed option if no preprocessed files exist
+                const preprocessedRadio = document.getElementById('audioSourcePreprocessed');
+                if (data.preprocessed_count === 0) {
+                    preprocessedRadio.disabled = true;
+                    document.getElementById('audioSourceOriginal').checked = true;
+                } else {
+                    preprocessedRadio.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error loading file counts:', error);
+            }
         }
 
         function updateTerminalCommand() {
@@ -660,9 +735,34 @@
             });
         }
 
-        function browseCheckpoint() {
-            // This would open a file browser in a real implementation
-            alert('File browser would open here. For now, please enter the path manually.');
+        function handleCheckpointFileSelect(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                // Use the full path if available (security restricted in most browsers)
+                // Otherwise use relative path from file name
+                const pathInput = document.getElementById('checkpointPath');
+                
+                // Try to get full path (won't work in most browsers due to security)
+                const fullPath = file.path || file.webkitRelativePath || file.name;
+                
+                // If we got just the filename, suggest the checkpoints directory
+                if (fullPath === file.name) {
+                    // Guess checkpoint location based on filename
+                    if (file.name.includes('sv-') || file.name.includes('swedish')) {
+                        pathInput.value = `checkpoints/sv-SE/${file.name}`;
+                    } else if (file.name.includes('en-')) {
+                        pathInput.value = `checkpoints/en-US/${file.name}`;
+                    } else {
+                        pathInput.value = `checkpoints/${file.name}`;
+                    }
+                    
+                    // Show info about manual path
+                    alert(`Selected: ${file.name}\n\nNote: For security, browsers don't provide the full file path.\n\nPlease verify the path is correct or edit manually:\n${pathInput.value}\n\nOr copy the file to the suggested location.`);
+                } else {
+                    // We got a full path (Electron, some desktop browsers)
+                    pathInput.value = fullPath.replace(/\\/g, '/'); // Convert Windows paths
+                }
+            }
         }
 
         function browseOutputDir() {
@@ -888,20 +988,31 @@
             fetch(`/api/checkpoints/${language}/${voiceId}/download`, {
                 method: 'POST'
             })
-            .then(response => response.json())
+            .then(async response => {
+                if (!response.ok) {
+                    // Handle HTTP errors
+                    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     statusSpan.innerHTML = '<span class="text-success"><i class="fas fa-check me-1"></i>Downloaded</span>';
                     downloadBtn.style.display = 'none';
+                    alert(`Checkpoint downloaded successfully!\n\nLocation: ${data.checkpoint_path || 'checkpoints/' + language + '/' + voiceId}`);
                     // Refresh the select to show downloaded status
                     loadAvailableCheckpoints();
                 } else {
+                    const errorMsg = data.error || data.message || 'Unknown error';
                     statusSpan.innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Failed</span>';
-                    console.error('Download failed:', data.error);
+                    alert('Download failed: ' + errorMsg);
+                    console.error('Download failed:', errorMsg);
                 }
             })
             .catch(error => {
                 statusSpan.innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Error</span>';
+                alert('Download error: ' + error.message);
                 console.error('Download error:', error);
             })
             .finally(() => {
@@ -931,6 +1042,17 @@
         document.getElementById('voiceProfile').addEventListener('change', function() {
             loadPromptLists();
             updateTerminalCommand();
+        });
+
+        // Add event listener for prompt list change
+        document.getElementById('promptList').addEventListener('change', function() {
+            updateFileCounts();
+            updateTerminalCommand();
+        });
+
+        // Add event listener for audio source change
+        document.querySelectorAll('input[name="audioSource"]').forEach(radio => {
+            radio.addEventListener('change', updateTerminalCommand);
         });
     </script>
 </body>
