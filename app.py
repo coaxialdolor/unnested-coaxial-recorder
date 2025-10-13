@@ -1968,10 +1968,10 @@ async def process_audio_batch(job_id: str):
         job["current_file"] = None
 
     except Exception as e:
-        processing_jobs[job_id]["status"] = "failed"
-        processing_jobs[job_id]["error"] = str(e)
-        if "console_output" in processing_jobs[job_id]:
-            processing_jobs[job_id]["console_output"].append(f"💥 Fatal Error: {str(e)}")
+        job["status"] = "failed"
+        job["error"] = str(e)
+        if "console_output" in job:
+            job["console_output"].append(f"💥 Fatal Error: {str(e)}")
         print(f"Processing job {job_id} failed: {e}")
 
 @app.get("/api/postprocess/status/{job_id}")

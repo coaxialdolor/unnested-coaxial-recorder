@@ -73,22 +73,38 @@
                             </div>
 
                             <div class="mb-3">
-                                <label for="silenceThreshold" class="form-label">Silence Threshold (dB)</label>
-                                <input type="range" class="form-range" id="silenceThreshold" min="-60" max="-20" value="-40" step="5">
-                                <div class="d-flex justify-content-between">
-                                    <small>-60 dB</small>
-                                    <small id="silenceThresholdValue">-40 dB</small>
-                                    <small>-20 dB</small>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableSilenceThreshold">
+                                    <label class="form-check-label" for="enableSilenceThreshold">
+                                        Enable Silence Threshold
+                                    </label>
+                                </div>
+                                <div id="silenceThresholdContainer">
+                                    <label for="silenceThreshold" class="form-label">Silence Threshold (dB)</label>
+                                    <input type="range" class="form-range" id="silenceThreshold" min="-60" max="-20" value="-40" step="5">
+                                    <div class="d-flex justify-content-between">
+                                        <small>-60 dB</small>
+                                        <small id="silenceThresholdValue">-40 dB</small>
+                                        <small>-20 dB</small>
+                                    </div>
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label for="targetVolume" class="form-label">Target Volume (dB) <span class="badge bg-success">Recommended: -6 dB</span></label>
-                                <input type="range" class="form-range" id="targetVolume" min="-20" max="-1" value="-6" step="1">
-                                <div class="d-flex justify-content-between">
-                                    <small>-20 dB</small>
-                                    <small id="targetVolumeValue">-6 dB</small>
-                                    <small>-1 dB</small>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableTargetVolume">
+                                    <label class="form-check-label" for="enableTargetVolume">
+                                        Enable Target Volume
+                                    </label>
+                                </div>
+                                <div id="targetVolumeContainer">
+                                    <label for="targetVolume" class="form-label">Target Volume (dB) <span class="badge bg-success">Recommended: -6 dB</span></label>
+                                    <input type="range" class="form-range" id="targetVolume" min="-20" max="-1" value="-6" step="1">
+                                    <div class="d-flex justify-content-between">
+                                        <small>-20 dB</small>
+                                        <small id="targetVolumeValue">-6 dB</small>
+                                        <small>-1 dB</small>
+                                    </div>
                                 </div>
                             </div>
 
@@ -103,12 +119,20 @@
                             </div>
 
                             <div class="mb-3">
-                                <label for="silencePadding" class="form-label">Silence Padding (ms)</label>
-                                <input type="range" class="form-range" id="silencePadding" min="0" max="1000" value="200" step="50">
-                                <div class="d-flex justify-content-between">
-                                    <small>0 ms</small>
-                                    <small id="silencePaddingValue">200 ms</small>
-                                    <small>1000 ms</small>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableSilencePadding">
+                                    <label class="form-check-label" for="enableSilencePadding">
+                                        Enable Silence Padding
+                                    </label>
+                                </div>
+                                <div id="silencePaddingContainer">
+                                    <label for="silencePadding" class="form-label">Silence Padding (ms)</label>
+                                    <input type="range" class="form-range" id="silencePadding" min="0" max="1000" value="200" step="50">
+                                    <div class="d-flex justify-content-between">
+                                        <small>0 ms</small>
+                                        <small id="silencePaddingValue">200 ms</small>
+                                        <small>1000 ms</small>
+                                    </div>
                                 </div>
                             </div>
 
@@ -298,13 +322,28 @@
             document.getElementById('silencePadding').addEventListener('input', function() {
                 document.getElementById('silencePaddingValue').textContent = this.value + ' ms';
             });
-            
+
             document.getElementById('compressionRatio').addEventListener('input', function() {
                 document.getElementById('compressionRatioValue').textContent = this.value + ':1';
             });
-            
+
             document.getElementById('applyCompression').addEventListener('change', function() {
                 document.getElementById('compressionSettingsContainer').style.display = this.checked ? 'block' : 'none';
+            });
+
+            // Enable/disable silence threshold
+            document.getElementById('enableSilenceThreshold').addEventListener('change', function() {
+                document.getElementById('silenceThresholdContainer').style.display = this.checked ? 'block' : 'none';
+            });
+
+            // Enable/disable target volume
+            document.getElementById('enableTargetVolume').addEventListener('change', function() {
+                document.getElementById('targetVolumeContainer').style.display = this.checked ? 'block' : 'none';
+            });
+
+            // Enable/disable silence padding
+            document.getElementById('enableSilencePadding').addEventListener('change', function() {
+                document.getElementById('silencePaddingContainer').style.display = this.checked ? 'block' : 'none';
             });
 
             // Form submission
