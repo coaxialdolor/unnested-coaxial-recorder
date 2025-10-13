@@ -1809,6 +1809,8 @@ async def start_postprocessing(request: Request):
         target_sample_rate = data.get("target_sample_rate", 44100)  # Default to 44.1kHz
         silence_padding = data.get("silence_padding", 200)
         create_backup = data.get("create_backup", True)
+        apply_compression = data.get("apply_compression", False)  # New parameter for compression
+        compression_ratio = data.get("compression_ratio", 4.0)  # New parameter for compression ratio
 
         if not profile_id or not prompt_list_ids:
             raise HTTPException(status_code=400, detail="profile_id and prompt_list_ids are required")
@@ -1827,6 +1829,8 @@ async def start_postprocessing(request: Request):
             "target_sample_rate": target_sample_rate,
             "silence_padding": silence_padding,
             "create_backup": create_backup,
+            "apply_compression": apply_compression,
+            "compression_ratio": compression_ratio,
             "processed": 0,
             "total": 0,
             "current_file": None,
@@ -1861,7 +1865,7 @@ async def process_audio_batch(job_id: str):
         job["output_location"] = str(preprocessed_dir)
         
         job["console_output"].append(f"📁 Output location: {preprocessed_dir}")
-        job["console_output"].append(f"⚙️  Settings: Threshold={job['silence_threshold']}dB, Volume={job['target_volume']}dB, Rate={job['target_sample_rate']}Hz, Padding={job['silence_padding']}ms")
+        job["console_output"].append(f"⚙️  Settings: Threshold={job['silence_threshold']}dB, Volume={job['target_volume']}dB, Rate={job['target_sample_rate']}Hz, Padding={job['silence_padding']}ms, Compression={job['apply_compression']}")
         job["console_output"].append("─" * 60)
 
         # Get files to process from ALL selected prompt lists
@@ -1923,7 +1927,8 @@ async def process_audio_batch(job_id: str):
                     job["target_volume"],
                     job["target_sample_rate"],
                     job["silence_padding"],
-                    create_backup=False  # No backup needed since originals stay in place
+                    create_backup=False,  # No backup needed since originals stay in place
+                    apply_comp=job["apply_compression"]  # Use compression setting from job
                 )
 
                 if success:

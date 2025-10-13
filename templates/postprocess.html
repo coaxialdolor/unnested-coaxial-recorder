@@ -114,6 +114,27 @@
 
                             <div class="mb-3">
                                 <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="applyCompression" checked>
+                                    <label class="form-check-label" for="applyCompression">
+                                        Apply dynamic range compression
+                                    </label>
+                                    <small class="form-text text-muted d-block">Makes quiet parts louder without clipping</small>
+                                </div>
+                            </div>
+
+                            <div class="mb-3" id="compressionSettingsContainer">
+                                <label for="compressionRatio" class="form-label">Compression Ratio <span class="badge bg-success">Recommended: 4:1</span></label>
+                                <input type="range" class="form-range" id="compressionRatio" min="1.5" max="8" value="4" step="0.5">
+                                <div class="d-flex justify-content-between">
+                                    <small>1.5:1</small>
+                                    <small id="compressionRatioValue">4:1</small>
+                                    <small>8:1</small>
+                                </div>
+                                <small class="form-text text-muted">Higher values make quiet sounds louder but may introduce artifacts</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="createBackup" checked>
                                     <label class="form-check-label" for="createBackup">
                                         Create backup of original files
@@ -277,6 +298,14 @@
             document.getElementById('silencePadding').addEventListener('input', function() {
                 document.getElementById('silencePaddingValue').textContent = this.value + ' ms';
             });
+            
+            document.getElementById('compressionRatio').addEventListener('input', function() {
+                document.getElementById('compressionRatioValue').textContent = this.value + ':1';
+            });
+            
+            document.getElementById('applyCompression').addEventListener('change', function() {
+                document.getElementById('compressionSettingsContainer').style.display = this.checked ? 'block' : 'none';
+            });
 
             // Form submission
             document.getElementById('postProcessForm').addEventListener('submit', function(e) {
@@ -416,6 +445,8 @@
             const targetSampleRate = document.getElementById('targetSampleRate').value;
             const silencePadding = document.getElementById('silencePadding').value;
             const createBackup = document.getElementById('createBackup').checked;
+            const applyCompression = document.getElementById('applyCompression').checked;
+            const compressionRatio = document.getElementById('compressionRatio').value;
 
             if (!profileId || promptListIds.length === 0) {
                 alert('Please select a voice profile and at least one prompt list.');
@@ -443,7 +474,9 @@
                     target_volume: parseInt(targetVolume),
                     target_sample_rate: parseInt(targetSampleRate),
                     silence_padding: parseInt(silencePadding),
-                    create_backup: createBackup
+                    create_backup: createBackup,
+                    apply_compression: applyCompression,
+                    compression_ratio: parseFloat(compressionRatio)
                 })
             })
             .then(response => response.json())
