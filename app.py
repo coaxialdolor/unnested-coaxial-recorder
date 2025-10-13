@@ -2872,6 +2872,9 @@ async def discover_checkpoints():
     try:
         discovered = []
         
+        # Define checkpoints directory
+        checkpoints_dir = Path("checkpoints")
+        
         # Search in multiple directories
         search_dirs = [
             Path("checkpoints"),
@@ -2918,34 +2921,38 @@ async def discover_checkpoints():
                     continue
         
         # Also check for .pt and .pth files
-        for ext in ["*.pt", "*.pth"]:
-            for checkpoint_file in checkpoints_dir.rglob(ext):
-                try:
-                    file_size = checkpoint_file.stat().st_size
-                    size_mb = file_size / (1024 * 1024)
-                    
-                    parts = checkpoint_file.parts
-                    language = "unknown"
-                    if len(parts) >= 2:
-                        for part in parts:
-                            if '-' in part and len(part) <= 6:
-                                language = part
-                                break
-                    
-                    relative_path = checkpoint_file.relative_to(Path("."))
-                    
-                    discovered.append({
-                        "name": checkpoint_file.stem,
-                        "filename": checkpoint_file.name,
-                        "path": str(relative_path).replace("\\", "/"),
-                        "size": f"{size_mb:.1f} MB",
-                        "size_bytes": file_size,
-                        "language": language,
-                        "directory": str(checkpoint_file.parent.relative_to(checkpoints_dir))
-                    })
-                except Exception as e:
-                    print(f"Error processing checkpoint {checkpoint_file}: {e}")
-                    continue
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
+                
+            for ext in ["*.pt", "*.pth"]:
+                for checkpoint_file in search_dir.rglob(ext):
+                    try:
+                        file_size = checkpoint_file.stat().st_size
+                        size_mb = file_size / (1024 * 1024)
+                        
+                        parts = checkpoint_file.parts
+                        language = "unknown"
+                        if len(parts) >= 2:
+                            for part in parts:
+                                if '-' in part and len(part) <= 6:
+                                    language = part
+                                    break
+                        
+                        relative_path = checkpoint_file.relative_to(Path("."))
+                        
+                        discovered.append({
+                            "name": checkpoint_file.stem,
+                            "filename": checkpoint_file.name,
+                            "path": str(relative_path).replace("\\", "/"),
+                            "size": f"{size_mb:.1f} MB",
+                            "size_bytes": file_size,
+                            "language": language,
+                            "directory": str(checkpoint_file.parent.relative_to(search_dir))
+                        })
+                    except Exception as e:
+                        print(f"Error processing checkpoint {checkpoint_file}: {e}")
+                        continue
         
         # Sort by language, then by name
         discovered.sort(key=lambda x: (x["language"], x["name"]))
