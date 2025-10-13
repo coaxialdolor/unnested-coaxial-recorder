@@ -1847,6 +1847,22 @@ async def process_audio_batch(job_id: str):
         job = processing_jobs[job_id]
         profile_dir = VOICES_DIR / job["profile_id"]
         recordings_dir = profile_dir / "recordings"
+        
+        # Create preprocessed directory
+        preprocessed_dir = recordings_dir / "preprocessed"
+        preprocessed_dir.mkdir(exist_ok=True)
+
+        # Initialize tracking variables
+        job["console_output"] = []
+        job["failed"] = 0
+        job["failed_files"] = []
+        job["skipped"] = 0
+        job["successful"] = 0
+        job["output_location"] = str(preprocessed_dir)
+        
+        job["console_output"].append(f"📁 Output location: {preprocessed_dir}")
+        job["console_output"].append(f"⚙️  Settings: Threshold={job['silence_threshold']}dB, Volume={job['target_volume']}dB, Rate={job['target_sample_rate']}Hz, Padding={job['silence_padding']}ms")
+        job["console_output"].append("─" * 60)
 
         # Get files to process from ALL selected prompt lists
         files_to_process = []
@@ -1860,6 +1876,8 @@ async def process_audio_batch(job_id: str):
             else:
                 prompt_name = prompt_list_id
             prompt_names.append(prompt_name)
+
+        job["console_output"].append(f"🔍 Searching for files from: {', '.join(prompt_names)}")
 
         # Collect files from all prompt lists while preserving metadata
         if metadata_file.exists():
@@ -1879,34 +1897,76 @@ async def process_audio_batch(job_id: str):
                             continue
 
         job["total"] = len(files_to_process)
+        job["console_output"].append(f"📊 Found {job['total']} files to process")
+        job["console_output"].append("─" * 60)
+        
+        if job["total"] == 0:
+            job["console_output"].append("⚠️  No files found matching the selected prompt lists!")
+            job["status"] = "completed"
+            return
 
         # Process each file with sample rate conversion
         for i, (file_path, metadata) in enumerate(files_to_process):
             job["current_file"] = file_path.name
             job["processed"] = i
 
-            # Process the file with sample rate conversion
-            from utils.audio import process_audio_enhanced_with_sample_rate
-            success, _, _ = process_audio_enhanced_with_sample_rate(
-                file_path,
-                job["silence_threshold"],
-                job["target_volume"],
-                job["target_sample_rate"],
-                job["silence_padding"],
-                job["create_backup"]
-            )
+            try:
+                # Create output path in preprocessed directory
+                output_path = preprocessed_dir / file_path.name
+                
+                # Process the file with sample rate conversion
+                from utils.audio import process_audio_enhanced_with_sample_rate
+                success, original_duration, new_duration = process_audio_enhanced_with_sample_rate(
+                    file_path,
+                    output_path,
+                    job["silence_threshold"],
+                    job["target_volume"],
+                    job["target_sample_rate"],
+                    job["silence_padding"],
+                    create_backup=False  # No backup needed since originals stay in place
+                )
 
-            if not success:
-                print(f"Failed to process {file_path}")
+                if success:
+                    job["successful"] += 1
+                    duration_change = new_duration - original_duration
+                    duration_str = f"{original_duration:.2f}s → {new_duration:.2f}s ({duration_change:+.2f}s)"
+                    job["console_output"].append(f"✅ [{i+1}/{job['total']}] {file_path.name} - {duration_str}")
+                else:
+                    job["failed"] += 1
+                    job["failed_files"].append(file_path.name)
+                    job["console_output"].append(f"❌ [{i+1}/{job['total']}] {file_path.name} - Processing failed")
 
-        # Mark as completed
-        job["status"] = "completed"
+            except Exception as e:
+                job["failed"] += 1
+                job["failed_files"].append(file_path.name)
+                job["console_output"].append(f"❌ [{i+1}/{job['total']}] {file_path.name} - Error: {str(e)}")
+                print(f"Error processing {file_path}: {e}")
+
+        # Final summary
+        job["console_output"].append("─" * 60)
+        job["console_output"].append(f"✨ Processing Complete!")
+        job["console_output"].append(f"   ✅ Successful: {job['successful']}")
+        job["console_output"].append(f"   ❌ Failed: {job['failed']}")
+        job["console_output"].append(f"   📁 Output: {preprocessed_dir}")
+
+        # Mark as completed with appropriate status
+        if job["failed"] == job["total"]:
+            job["status"] = "failed"
+            job["error"] = f"All {job['total']} files failed to process"
+        elif job["failed"] > 0:
+            job["status"] = "partial"
+            job["error"] = f"{job['failed']} of {job['total']} files failed"
+        else:
+            job["status"] = "completed"
+            
         job["processed"] = job["total"]
         job["current_file"] = None
 
     except Exception as e:
         processing_jobs[job_id]["status"] = "failed"
         processing_jobs[job_id]["error"] = str(e)
+        if "console_output" in processing_jobs[job_id]:
+            processing_jobs[job_id]["console_output"].append(f"💥 Fatal Error: {str(e)}")
         print(f"Processing job {job_id} failed: {e}")
 
 @app.get("/api/postprocess/status/{job_id}")
@@ -1941,6 +2001,77 @@ async def get_postprocess_history():
     # Sort by creation time, newest first
     recent_jobs.sort(key=lambda x: x["created_at"], reverse=True)
     return recent_jobs[:10]
+
+@app.get("/api/postprocess/comparison-files/{profile_id}")
+async def get_comparison_files(profile_id: str):
+    """Get list of files with their preprocessed status"""
+    try:
+        profile_dir = VOICES_DIR / profile_id
+        recordings_dir = profile_dir / "recordings"
+        preprocessed_dir = recordings_dir / "preprocessed"
+        
+        files = []
+        for file_path in recordings_dir.glob("*.wav"):
+            preprocessed_path = preprocessed_dir / file_path.name
+            files.append({
+                "filename": file_path.name,
+                "has_preprocessed": preprocessed_path.exists()
+            })
+        
+        return sorted(files, key=lambda x: x["filename"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/postprocess/compare/{profile_id}/{filename}")
+async def compare_audio_files(profile_id: str, filename: str):
+    """Compare original and preprocessed audio files"""
+    try:
+        profile_dir = VOICES_DIR / profile_id
+        recordings_dir = profile_dir / "recordings"
+        preprocessed_dir = recordings_dir / "preprocessed"
+        
+        original_path = recordings_dir / filename
+        preprocessed_path = preprocessed_dir / filename
+        
+        if not original_path.exists():
+            raise HTTPException(status_code=404, detail="Original file not found")
+        
+        if not preprocessed_path.exists():
+            raise HTTPException(status_code=404, detail="Preprocessed file not found")
+        
+        # Get audio info for both files
+        from utils.audio import get_audio_info
+        
+        original_stats = get_audio_info(original_path)
+        preprocessed_stats = get_audio_info(preprocessed_path)
+        
+        return {
+            "original_url": f"/api/audio/{profile_id}/recordings/{filename}",
+            "preprocessed_url": f"/api/audio/{profile_id}/recordings/preprocessed/{filename}",
+            "original_stats": original_stats,
+            "preprocessed_stats": preprocessed_stats
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Serve audio files for comparison
+@app.get("/api/audio/{profile_id}/recordings/{filename:path}")
+async def serve_audio_file(profile_id: str, filename: str):
+    """Serve audio files for playback"""
+    try:
+        profile_dir = VOICES_DIR / profile_id
+        file_path = profile_dir / "recordings" / filename
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        
+        return FileResponse(file_path, media_type="audio/wav")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Export endpoints
 @app.get("/export", response_class=HTMLResponse)
@@ -2092,6 +2223,26 @@ async def export_audio_batch(job_id: str):
             with open(transcript_path, "w", encoding="utf-8") as f:
                 for entry in metadata_entries:
                     f.write(f"{entry.get('filename', '')}\t{entry.get('sentence', '')}\n")
+
+        # Create unzipped copy in Exported datasets folder
+        exported_datasets_dir = profile_dir / "Exported datasets"
+        exported_datasets_dir.mkdir(exist_ok=True)
+        
+        local_export_dir = exported_datasets_dir / export_dir.name
+        local_export_dir.mkdir(exist_ok=True)
+        
+        # Copy all exported files to the local export directory
+        import shutil
+        for file_path in exported_files:
+            shutil.copy2(file_path, local_export_dir / file_path.name)
+        
+        # Copy metadata and transcripts if they were created
+        if job["include_metadata"] and metadata_entries:
+            shutil.copy2(metadata_export_path, local_export_dir / "metadata.json")
+        if job["include_transcripts"] and metadata_entries:
+            shutil.copy2(transcript_path, local_export_dir / "transcripts.txt")
+        
+        job["local_export_path"] = str(local_export_dir)
 
         # Create ZIP if requested
         if job["create_zip"]:
@@ -2592,7 +2743,7 @@ async def get_checkpoint_info(language_code: str, voice_id: str):
 async def download_checkpoint_endpoint(language_code: str, voice_id: str):
     """Download a specific checkpoint"""
     if not CHECKPOINT_SUPPORT:
-        return {"error": "Checkpoint support not available"}
+        raise HTTPException(status_code=503, detail="Checkpoint support not available")
 
     try:
         checkpoint_manager = get_checkpoint_manager()
@@ -2621,7 +2772,147 @@ async def download_checkpoint_endpoint(language_code: str, voice_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        return {"error": f"Failed to download checkpoint: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Failed to download checkpoint: {str(e)}")
+
+@app.post("/api/train/file-counts/{profile_id}")
+async def get_training_file_counts(profile_id: str, request: Request):
+    """Get counts of original and preprocessed files for training"""
+    try:
+        data = await request.json()
+        prompt_list_ids = data.get("prompt_list_ids", [])
+        
+        profile_dir = VOICES_DIR / profile_id
+        recordings_dir = profile_dir / "recordings"
+        preprocessed_dir = recordings_dir / "preprocessed"
+        metadata_file = profile_dir / "metadata.jsonl"
+        
+        # Parse prompt list names
+        prompt_names = []
+        for prompt_list_id in prompt_list_ids:
+            if prompt_list_id.startswith(f"{profile_id}_"):
+                prompt_name = prompt_list_id[len(profile_id) + 1:]
+            else:
+                prompt_name = prompt_list_id
+            prompt_names.append(prompt_name)
+        
+        original_count = 0
+        preprocessed_count = 0
+        
+        # Count files from metadata
+        if metadata_file.exists():
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            metadata = json.loads(line.strip())
+                            if metadata.get("prompt_list") in prompt_names:
+                                filename = metadata.get("filename")
+                                if filename:
+                                    original_path = recordings_dir / filename
+                                    preprocessed_path = preprocessed_dir / filename
+                                    
+                                    if original_path.exists():
+                                        original_count += 1
+                                    if preprocessed_path.exists():
+                                        preprocessed_count += 1
+                        except json.JSONDecodeError:
+                            continue
+        
+        return {
+            "original_count": original_count,
+            "preprocessed_count": preprocessed_count,
+            "prompt_lists": prompt_names
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/test/discover-checkpoints")
+async def discover_checkpoints():
+    """Discover all checkpoint files in the checkpoints directory"""
+    try:
+        checkpoints_dir = Path("checkpoints")
+        discovered = []
+        
+        if not checkpoints_dir.exists():
+            return {"success": True, "checkpoints": []}
+        
+        # Search for all .ckpt, .pt, .pth files
+        for checkpoint_file in checkpoints_dir.rglob("*.ckpt"):
+            try:
+                # Get file info
+                file_size = checkpoint_file.stat().st_size
+                size_mb = file_size / (1024 * 1024)
+                
+                # Try to determine language from path
+                parts = checkpoint_file.parts
+                language = "unknown"
+                if len(parts) >= 2:
+                    # Try to extract language code (e.g., sv-SE, en-US)
+                    for part in parts:
+                        if '-' in part and len(part) <= 6:
+                            language = part
+                            break
+                
+                # Get relative path from checkpoints directory
+                relative_path = checkpoint_file.relative_to(Path("."))
+                
+                discovered.append({
+                    "name": checkpoint_file.stem,
+                    "filename": checkpoint_file.name,
+                    "path": str(relative_path).replace("\\", "/"),
+                    "size": f"{size_mb:.1f} MB",
+                    "size_bytes": file_size,
+                    "language": language,
+                    "directory": str(checkpoint_file.parent.relative_to(checkpoints_dir))
+                })
+            except Exception as e:
+                print(f"Error processing checkpoint {checkpoint_file}: {e}")
+                continue
+        
+        # Also check for .pt and .pth files
+        for ext in ["*.pt", "*.pth"]:
+            for checkpoint_file in checkpoints_dir.rglob(ext):
+                try:
+                    file_size = checkpoint_file.stat().st_size
+                    size_mb = file_size / (1024 * 1024)
+                    
+                    parts = checkpoint_file.parts
+                    language = "unknown"
+                    if len(parts) >= 2:
+                        for part in parts:
+                            if '-' in part and len(part) <= 6:
+                                language = part
+                                break
+                    
+                    relative_path = checkpoint_file.relative_to(Path("."))
+                    
+                    discovered.append({
+                        "name": checkpoint_file.stem,
+                        "filename": checkpoint_file.name,
+                        "path": str(relative_path).replace("\\", "/"),
+                        "size": f"{size_mb:.1f} MB",
+                        "size_bytes": file_size,
+                        "language": language,
+                        "directory": str(checkpoint_file.parent.relative_to(checkpoints_dir))
+                    })
+                except Exception as e:
+                    print(f"Error processing checkpoint {checkpoint_file}: {e}")
+                    continue
+        
+        # Sort by language, then by name
+        discovered.sort(key=lambda x: (x["language"], x["name"]))
+        
+        return {
+            "success": True,
+            "checkpoints": discovered,
+            "count": len(discovered)
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "checkpoints": []
+        }
 
 @app.delete("/api/checkpoints/{language_code}/{voice_id}")
 async def delete_checkpoint_endpoint(language_code: str, voice_id: str):
