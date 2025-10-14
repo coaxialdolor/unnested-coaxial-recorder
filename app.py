@@ -7,6 +7,7 @@ import shutil
 import requests
 import base64
 import asyncio
+import warnings
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
@@ -18,11 +19,32 @@ from pydantic import BaseModel
 from pathlib import Path
 import subprocess
 
+# Suppress NumPy 2.x compatibility warnings from PyTorch
+warnings.filterwarnings('ignore', message='.*compiled using NumPy 1.x.*')
+warnings.filterwarnings('ignore', message='.*_ARRAY_API not found.*')
+
+# Suppress stderr during PyTorch import to hide NumPy warnings
+import sys
+import contextlib
+
+@contextlib.contextmanager
+def suppress_stderr():
+    """Temporarily suppress stderr output"""
+    with open(os.devnull, 'w') as devnull:
+        old_stderr = sys.stderr
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stderr = old_stderr
+
 # Import phoneme and MFA utilities
 try:
-    from utils.phonemes import get_phoneme_manager, is_language_supported, get_supported_languages
-    from utils.mfa import get_mfa_aligner, is_mfa_available
-    from utils.checkpoints import get_checkpoint_manager, download_checkpoint, get_available_checkpoints
+    # Suppress stderr during imports to hide NumPy/PyTorch warnings
+    with suppress_stderr():
+        from utils.phonemes import get_phoneme_manager, is_language_supported, get_supported_languages
+        from utils.mfa import get_mfa_aligner, is_mfa_available
+        from utils.checkpoints import get_checkpoint_manager, download_checkpoint, get_available_checkpoints
     PHONEME_SUPPORT = True
     CHECKPOINT_SUPPORT = True
 except ImportError:
@@ -1188,7 +1210,7 @@ async def open_recordings_folder(profile_name: str):
             else:
                 # Return the path for Docker/containers
                 return {
-                    "success": True, 
+                    "success": True,
                     "message": "Running in container - folder available at host path",
                     "path": str(recordings_dir)
                 }
@@ -1254,12 +1276,12 @@ async def save_recording(
 
         # Save the audio file
         contents = await audio.read()
-        
+
         # Save raw file first
         temp_path = file_path.with_suffix('.tmp')
         with open(temp_path, 'wb') as f:
             f.write(contents)
-        
+
         # Try to convert to proper WAV format immediately
         try:
             from pydub import AudioSegment
@@ -1421,7 +1443,7 @@ async def delete_recording(profile_name: str, prompt_list_id: str, prompt_index:
         prompt_name = prompt_list_id
 
     deleted_filename = None
-    
+
     # Find and delete the recording file
     if metadata_file.exists() and recordings_dir.exists():
         # Read all metadata
@@ -1446,11 +1468,11 @@ async def delete_recording(profile_name: str, prompt_list_id: str, prompt_index:
                         metadata_lines.append(line)
                     except json.JSONDecodeError:
                         metadata_lines.append(line)  # Keep malformed lines
-        
+
         # Write back the updated metadata (without the deleted recording)
         with open(metadata_file, "w", encoding="utf-8") as f:
             f.writelines(metadata_lines)
-    
+
     if deleted_filename:
         return {"success": True, "message": f"Recording {deleted_filename} deleted"}
     else:
@@ -1851,7 +1873,7 @@ async def process_audio_batch(job_id: str):
         job = processing_jobs[job_id]
         profile_dir = VOICES_DIR / job["profile_id"]
         recordings_dir = profile_dir / "recordings"
-        
+
         # Create preprocessed directory
         preprocessed_dir = recordings_dir / "preprocessed"
         preprocessed_dir.mkdir(exist_ok=True)
@@ -1863,7 +1885,7 @@ async def process_audio_batch(job_id: str):
         job["skipped"] = 0
         job["successful"] = 0
         job["output_location"] = str(preprocessed_dir)
-        
+
         job["console_output"].append(f"📁 Output location: {preprocessed_dir}")
         job["console_output"].append(f"⚙️  Settings: Threshold={job['silence_threshold']}dB, Volume={job['target_volume']}dB, Rate={job['target_sample_rate']}Hz, Padding={job['silence_padding']}ms, Compression={job['apply_compression']}")
         job["console_output"].append("─" * 60)
@@ -1903,7 +1925,7 @@ async def process_audio_batch(job_id: str):
         job["total"] = len(files_to_process)
         job["console_output"].append(f"📊 Found {job['total']} files to process")
         job["console_output"].append("─" * 60)
-        
+
         if job["total"] == 0:
             job["console_output"].append("⚠️  No files found matching the selected prompt lists!")
             job["status"] = "completed"
@@ -1917,7 +1939,7 @@ async def process_audio_batch(job_id: str):
             try:
                 # Create output path in preprocessed directory
                 output_path = preprocessed_dir / file_path.name
-                
+
                 # Process the file with sample rate conversion
                 from utils.audio import process_audio_enhanced_with_sample_rate
                 success, original_duration, new_duration = process_audio_enhanced_with_sample_rate(
@@ -1963,7 +1985,7 @@ async def process_audio_batch(job_id: str):
             job["error"] = f"{job['failed']} of {job['total']} files failed"
         else:
             job["status"] = "completed"
-            
+
         job["processed"] = job["total"]
         job["current_file"] = None
 
@@ -2014,7 +2036,7 @@ async def get_comparison_files(profile_id: str):
         profile_dir = VOICES_DIR / profile_id
         recordings_dir = profile_dir / "recordings"
         preprocessed_dir = recordings_dir / "preprocessed"
-        
+
         files = []
         for file_path in recordings_dir.glob("*.wav"):
             preprocessed_path = preprocessed_dir / file_path.name
@@ -2022,7 +2044,7 @@ async def get_comparison_files(profile_id: str):
                 "filename": file_path.name,
                 "has_preprocessed": preprocessed_path.exists()
             })
-        
+
         return sorted(files, key=lambda x: x["filename"])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2100,10 +2122,10 @@ async def serve_audio_file(profile_id: str, filename: str):
     try:
         profile_dir = VOICES_DIR / profile_id
         file_path = profile_dir / "recordings" / filename
-        
+
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Audio file not found")
-        
+
         return FileResponse(file_path, media_type="audio/wav")
     except HTTPException:
         raise
@@ -2264,21 +2286,21 @@ async def export_audio_batch(job_id: str):
         # Create unzipped copy in Exported datasets folder
         exported_datasets_dir = profile_dir / "Exported datasets"
         exported_datasets_dir.mkdir(exist_ok=True)
-        
+
         local_export_dir = exported_datasets_dir / export_dir.name
         local_export_dir.mkdir(exist_ok=True)
-        
+
         # Copy all exported files to the local export directory
         import shutil
         for file_path in exported_files:
             shutil.copy2(file_path, local_export_dir / file_path.name)
-        
+
         # Copy metadata and transcripts if they were created
         if job["include_metadata"] and metadata_entries:
             shutil.copy2(metadata_export_path, local_export_dir / "metadata.json")
         if job["include_transcripts"] and metadata_entries:
             shutil.copy2(transcript_path, local_export_dir / "transcripts.txt")
-        
+
         job["local_export_path"] = str(local_export_dir)
 
         # Create ZIP if requested
@@ -2464,11 +2486,11 @@ async def train_model_background(job_id: str):
     """Train model in background using actual PyTorch Lightning training"""
     try:
         job = training_jobs[job_id]
-        
+
         # Import training utilities
         from train_model import prepare_dataset
         from utils.vits_training import train_tts_model
-        
+
         # Prepare prompt names from IDs
         prompt_names = []
         for prompt_list_id in job["prompt_list_ids"]:
@@ -2477,7 +2499,7 @@ async def train_model_background(job_id: str):
             else:
                 prompt_name = prompt_list_id
             prompt_names.append(prompt_name)
-        
+
         # Log start
         job["console_output"].append(f"=== Starting ACTUAL TTS Model Training ===")
         job["console_output"].append(f"Profile: {job['profile_id']}")
@@ -2486,10 +2508,10 @@ async def train_model_background(job_id: str):
         job["console_output"].append(f"GPU: {'enabled' if job['use_gpu'] else 'disabled'}")
         job["console_output"].append(f"Mixed Precision: {'enabled' if job['mixed_precision'] else 'disabled'}")
         job["console_output"].append("")
-        
+
         # Prepare dataset
         job["console_output"].append("Preparing dataset...")
-        
+
         # Use first prompt list for dataset prep (they should be combined in prepare_dataset)
         dataset_info = prepare_dataset(
             profile_id=job["profile_id"],
@@ -2498,13 +2520,13 @@ async def train_model_background(job_id: str):
             language_code=job.get("language_code", "en-US"),
             audio_source="original"
         )
-        
+
         if not dataset_info.get("transcripts"):
             raise Exception("No training data found!")
-        
+
         job["console_output"].append(f"Dataset prepared: {len(dataset_info.get('transcripts', []))} samples")
         job["console_output"].append("")
-        
+
         # Prepare training config
         training_config = {
             'learning_rate': job["learning_rate"],
@@ -2516,12 +2538,12 @@ async def train_model_background(job_id: str):
             'sample_rate': 22050,
             'hidden_dim': 256 if job["model_size"] == 'small' else 512 if job["model_size"] == 'medium' else 1024
         }
-        
+
         # Run actual training
         job["console_output"].append("Initializing PyTorch Lightning trainer...")
         job["console_output"].append(f"Model will be saved to: {job['output_dir']}/checkpoints/")
         job["console_output"].append("")
-        
+
         success, message = train_tts_model(
             dataset_info=dataset_info,
             output_dir=job["output_dir"],
@@ -2529,7 +2551,7 @@ async def train_model_background(job_id: str):
             use_mfa=job["use_mfa"],
             checkpoint_path=job.get("checkpoint_path") if job.get("checkpoint_path") else None
         )
-        
+
         if success:
             training_jobs[job_id]["status"] = "completed"
             training_jobs[job_id]["console_output"].append("")
@@ -2852,12 +2874,12 @@ async def get_training_file_counts(profile_id: str, request: Request):
     try:
         data = await request.json()
         prompt_list_ids = data.get("prompt_list_ids", [])
-        
+
         profile_dir = VOICES_DIR / profile_id
         recordings_dir = profile_dir / "recordings"
         preprocessed_dir = recordings_dir / "preprocessed"
         metadata_file = profile_dir / "metadata.jsonl"
-        
+
         # Parse prompt list names
         prompt_names = []
         for prompt_list_id in prompt_list_ids:
@@ -2866,10 +2888,10 @@ async def get_training_file_counts(profile_id: str, request: Request):
             else:
                 prompt_name = prompt_list_id
             prompt_names.append(prompt_name)
-        
+
         original_count = 0
         preprocessed_count = 0
-        
+
         # Count files from metadata
         if metadata_file.exists():
             with open(metadata_file, "r", encoding="utf-8") as f:
@@ -2882,14 +2904,14 @@ async def get_training_file_counts(profile_id: str, request: Request):
                                 if filename:
                                     original_path = recordings_dir / filename
                                     preprocessed_path = preprocessed_dir / filename
-                                    
+
                                     if original_path.exists():
                                         original_count += 1
                                     if preprocessed_path.exists():
                                         preprocessed_count += 1
                         except json.JSONDecodeError:
                             continue
-        
+
         return {
             "original_count": original_count,
             "preprocessed_count": preprocessed_count,
@@ -2903,7 +2925,7 @@ async def discover_checkpoints():
     """Discover all checkpoint files across the entire project"""
     try:
         discovered = []
-        
+
         # Search in all relevant directories
         search_dirs = [
             Path("checkpoints"),
@@ -2914,42 +2936,42 @@ async def discover_checkpoints():
             Path("converted_models"),
             Path("voices")
         ]
-        
+
         # Also search in project root and common subdirectories
         search_patterns = [
             "*.ckpt",
-            "*.pt", 
+            "*.pt",
             "*.pth",
             "**/*.ckpt",
             "**/*.pt",
             "**/*.pth"
         ]
-        
+
         for search_dir in search_dirs:
             if not search_dir.exists():
                 continue
-                
+
             # Search for all checkpoint file types
             for pattern in search_patterns:
                 for checkpoint_file in search_dir.glob(pattern):
                     try:
                         if not checkpoint_file.is_file():
                             continue
-                            
+
                         # Get file info
                         file_size = checkpoint_file.stat().st_size
                         size_mb = file_size / (1024 * 1024)
-                        
+
                         # Try to determine language from path
                         parts = checkpoint_file.parts
                         language = "unknown"
-                        
+
                         # Look for language codes in path (e.g., sv-SE, en-US)
                         for part in parts:
                             if '-' in part and 3 <= len(part) <= 6:
                                 language = part
                                 break
-                        
+
                         # Also check for language codes with underscores
                         if language == "unknown":
                             for part in parts:
@@ -2957,9 +2979,9 @@ async def discover_checkpoints():
                                     # Convert underscore to dash (en_US -> en-US)
                                     language = part.replace('_', '-')
                                     break
-                        
+
                         relative_path = checkpoint_file.relative_to(Path("."))
-                        
+
                         # Check if this checkpoint is already in our list
                         existing = next((item for item in discovered if item["path"] == str(relative_path)), None)
                         if not existing:
@@ -2978,14 +3000,14 @@ async def discover_checkpoints():
                     except Exception as e:
                         print(f"Error processing checkpoint {checkpoint_file}: {e}")
                         continue
-        
+
         # Also include pre-defined checkpoints from the manifest
         checkpoint_manager = get_checkpoint_manager()
         for language_code, voices in checkpoint_manager.checkpoint_manifest.items():
             for voice_id, config in voices.items():
                 checkpoint_path = checkpoint_manager.get_checkpoint_path(language_code, voice_id)
                 is_downloaded = checkpoint_path.exists() and checkpoint_path.stat().st_size > 0
-                
+
                 discovered.append({
                     "name": f"{language_code}_{voice_id}",
                     "filename": f"{language_code}_{voice_id}.ckpt",
@@ -3001,14 +3023,14 @@ async def discover_checkpoints():
                     "voice_id": voice_id,
                     "config": config
                 })
-        
+
         # Sort by type (predefined first), then language, then by name
         discovered.sort(key=lambda x: (
             not x.get("is_predefined", False),  # Predefined first
-            x["language"], 
+            x["language"],
             x["name"]
         ))
-        
+
         return {
             "success": True,
             "checkpoints": discovered,
