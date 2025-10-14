@@ -5,11 +5,29 @@ Test script to verify installation
 
 import sys
 import importlib
+import os
+import contextlib
+
+@contextlib.contextmanager
+def suppress_stderr():
+    """Temporarily suppress stderr output"""
+    with open(os.devnull, 'w') as devnull:
+        old_stderr = sys.stderr
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stderr = old_stderr
 
 def test_import(module_name, package_name=None):
     """Test if a module can be imported"""
     try:
-        importlib.import_module(module_name)
+        # Suppress NumPy warnings for PyTorch imports
+        if module_name in ['torch', 'torchaudio']:
+            with suppress_stderr():
+                importlib.import_module(module_name)
+        else:
+            importlib.import_module(module_name)
         print(f"✅ {package_name or module_name}")
         return True
     except ImportError as e:
@@ -59,7 +77,8 @@ def main():
     # Test PyTorch CUDA
     print("\nPyTorch CUDA Support:")
     try:
-        import torch
+        with suppress_stderr():
+            import torch
         if torch.cuda.is_available():
             print(f"✅ CUDA available: {torch.cuda.device_count()} device(s)")
             for i in range(torch.cuda.device_count()):
