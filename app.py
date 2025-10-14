@@ -2900,105 +2900,127 @@ async def get_training_file_counts(profile_id: str, request: Request):
 
 @app.get("/api/test/discover-checkpoints")
 async def discover_checkpoints():
-    """Discover all checkpoint files in checkpoints and training output directories"""
+    """Discover all checkpoint files across the entire project"""
     try:
         discovered = []
         
-        # Define checkpoints directory
-        checkpoints_dir = Path("checkpoints")
-        
-        # Search in multiple directories
+        # Search in all relevant directories
         search_dirs = [
             Path("checkpoints"),
             Path("training/checkpoints"),
             Path("models"),
-            Path("output")
+            Path("output"),
+            Path("training"),
+            Path("converted_models"),
+            Path("voices")
+        ]
+        
+        # Also search in project root and common subdirectories
+        search_patterns = [
+            "*.ckpt",
+            "*.pt", 
+            "*.pth",
+            "**/*.ckpt",
+            "**/*.pt",
+            "**/*.pth"
         ]
         
         for search_dir in search_dirs:
             if not search_dir.exists():
                 continue
                 
-            # Search for all .ckpt, .pt, .pth files
-            for checkpoint_file in search_dir.rglob("*.ckpt"):
-                try:
-                    # Get file info
-                    file_size = checkpoint_file.stat().st_size
-                    size_mb = file_size / (1024 * 1024)
-                    
-                    # Try to determine language from path
-                    parts = checkpoint_file.parts
-                    language = "unknown"
-                    if len(parts) >= 2:
-                        # Try to extract language code (e.g., sv-SE, en-US)
-                        for part in parts:
-                            if '-' in part and len(part) <= 6:
-                                language = part
-                                break
-                    
-                    # Get relative path from working directory
-                    relative_path = checkpoint_file.relative_to(Path("."))
-                    
-                    discovered.append({
-                        "name": checkpoint_file.stem,
-                        "filename": checkpoint_file.name,
-                        "path": str(relative_path).replace("\\", "/"),
-                        "size": f"{size_mb:.1f} MB",
-                        "size_bytes": file_size,
-                        "language": language,
-                        "directory": str(checkpoint_file.parent.relative_to(checkpoints_dir))
-                    })
-                except Exception as e:
-                    print(f"Error processing checkpoint {checkpoint_file}: {e}")
-                    continue
-        
-        # Also check for .pt and .pth files
-        for search_dir in search_dirs:
-            if not search_dir.exists():
-                continue
-                
-            for ext in ["*.pt", "*.pth"]:
-                for checkpoint_file in search_dir.rglob(ext):
+            # Search for all checkpoint file types
+            for pattern in search_patterns:
+                for checkpoint_file in search_dir.glob(pattern):
                     try:
+                        if not checkpoint_file.is_file():
+                            continue
+                            
+                        # Get file info
                         file_size = checkpoint_file.stat().st_size
                         size_mb = file_size / (1024 * 1024)
                         
+                        # Try to determine language from path
                         parts = checkpoint_file.parts
                         language = "unknown"
-                        if len(parts) >= 2:
+                        
+                        # Look for language codes in path (e.g., sv-SE, en-US)
+                        for part in parts:
+                            if '-' in part and 3 <= len(part) <= 6:
+                                language = part
+                                break
+                        
+                        # Also check for language codes with underscores
+                        if language == "unknown":
                             for part in parts:
-                                if '-' in part and len(part) <= 6:
-                                    language = part
+                                if '_' in part and 3 <= len(part) <= 6:
+                                    # Convert underscore to dash (en_US -> en-US)
+                                    language = part.replace('_', '-')
                                     break
                         
                         relative_path = checkpoint_file.relative_to(Path("."))
                         
-                        discovered.append({
-                            "name": checkpoint_file.stem,
-                            "filename": checkpoint_file.name,
-                            "path": str(relative_path).replace("\\", "/"),
-                            "size": f"{size_mb:.1f} MB",
-                            "size_bytes": file_size,
-                            "language": language,
-                            "directory": str(checkpoint_file.parent.relative_to(search_dir))
-                        })
+                        # Check if this checkpoint is already in our list
+                        existing = next((item for item in discovered if item["path"] == str(relative_path)), None)
+                        if not existing:
+                            discovered.append({
+                                "name": checkpoint_file.stem,
+                                "filename": checkpoint_file.name,
+                                "path": str(relative_path).replace("\\", "/"),
+                                "size": f"{size_mb:.1f} MB",
+                                "size_bytes": file_size,
+                                "language": language,
+                                "directory": str(checkpoint_file.parent),
+                                "full_path": str(checkpoint_file.absolute()),
+                                "last_modified": checkpoint_file.stat().st_mtime,
+                                "is_predefined": False
+                            })
                     except Exception as e:
                         print(f"Error processing checkpoint {checkpoint_file}: {e}")
                         continue
         
-        # Sort by language, then by name
-        discovered.sort(key=lambda x: (x["language"], x["name"]))
+        # Also include pre-defined checkpoints from the manifest
+        checkpoint_manager = get_checkpoint_manager()
+        for language_code, voices in checkpoint_manager.checkpoint_manifest.items():
+            for voice_id, config in voices.items():
+                checkpoint_path = checkpoint_manager.get_checkpoint_path(language_code, voice_id)
+                is_downloaded = checkpoint_path.exists() and checkpoint_path.stat().st_size > 0
+                
+                discovered.append({
+                    "name": f"{language_code}_{voice_id}",
+                    "filename": f"{language_code}_{voice_id}.ckpt",
+                    "path": str(checkpoint_path),
+                    "size": "Unknown" if not is_downloaded else f"{checkpoint_path.stat().st_size / (1024 * 1024):.1f} MB",
+                    "size_bytes": 0 if not is_downloaded else checkpoint_path.stat().st_size,
+                    "language": language_code,
+                    "directory": "checkpoints",
+                    "full_path": str(checkpoint_path.absolute()),
+                    "last_modified": checkpoint_path.stat().st_mtime if is_downloaded else 0,
+                    "is_predefined": True,
+                    "is_downloaded": is_downloaded,
+                    "voice_id": voice_id,
+                    "config": config
+                })
+        
+        # Sort by type (predefined first), then language, then by name
+        discovered.sort(key=lambda x: (
+            not x.get("is_predefined", False),  # Predefined first
+            x["language"], 
+            x["name"]
+        ))
         
         return {
             "success": True,
             "checkpoints": discovered,
-            "count": len(discovered)
+            "count": len(discovered),
+            "last_scan": datetime.now().isoformat()
         }
     except Exception as e:
         return {
             "success": False,
             "error": str(e),
-            "checkpoints": []
+            "checkpoints": [],
+            "last_scan": datetime.now().isoformat()
         }
 
 @app.delete("/api/checkpoints/{language_code}/{voice_id}")
