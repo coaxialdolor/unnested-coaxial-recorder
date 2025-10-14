@@ -37,7 +37,7 @@ except ImportError:
 
 # Apply runtime GPU optimizations (RTX 5060 Ti compatibility)
 if LIGHTNING_AVAILABLE:
-logger = logging.getLogger(__name__)
+    logger = logging.getLogger(__name__)
 
     try:
         import torch
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
             # RTX 5060 Ti optimizations based on Copilot recommendations
             torch.backends.cudnn.benchmark = True  # Auto-tune kernels
             torch.backends.cuda.matmul.allow_tf32 = True  # Use TF32 on Ampere+
-            
+
             # Check for modern GPU (compute capability 8.0+)
             if hasattr(torch.cuda, 'get_device_capability'):
                 cap = torch.cuda.get_device_capability(0)

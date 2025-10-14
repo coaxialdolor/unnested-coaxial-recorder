@@ -52,16 +52,28 @@
                     <i class="fas fa-volume-up me-2"></i>Test Voice Models
                 </h1>
                 <p class="lead">Test available voice models by entering custom text and generating audio samples.</p>
+                
+                <div class="d-flex align-items-center mb-3">
+                    <button class="btn btn-outline-primary me-3" onclick="refreshAllModels()">
+                        <i class="fas fa-sync-alt me-2"></i>Refresh Available Models
+                    </button>
+                    <span id="refreshStatus" class="badge bg-success">
+                        <i class="fas fa-check-circle me-1"></i>Updated <span id="refreshTime"></span>
+                    </span>
+                </div>
             </div>
         </div>
 
         <div class="row">
             <div class="col-md-6">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-cog me-2"></i>Voice Configuration
                         </h5>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleCheckpointLists()">
+                            <i class="fas fa-exchange-alt me-1"></i>Switch View
+                        </button>
                     </div>
                     <div class="card-body">
                         <form id="testVoiceForm">
@@ -72,17 +84,31 @@
                                 </select>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="voice" class="form-label">Voice Model</label>
-                                <select class="form-select" id="voice" name="voice" disabled>
-                                    <option value="">Select a voice...</option>
-                                </select>
-                                <div class="form-text">Choose a pre-trained voice model to test</div>
+                            <!-- Pre-trained Base Voices Section -->
+                            <div id="predefinedSection">
+                                <div class="mb-3">
+                                    <label for="voice" class="form-label">Pre-trained Base Voice</label>
+                                    <select class="form-select" id="voice" name="voice" disabled onchange="handleVoiceSelection()">
+                                        <option value="">Select a pre-trained voice...</option>
+                                    </select>
+                                    <div class="form-text">Choose from available pre-trained voice models</div>
+                                </div>
+                            </div>
+
+                            <!-- Discovered Checkpoints Section -->
+                            <div id="discoveredSection" class="d-none">
+                                <div class="mb-3">
+                                    <label for="discoveredCheckpoint" class="form-label">Discovered Local Checkpoints</label>
+                                    <select class="form-select" id="discoveredCheckpoint" name="discoveredCheckpoint" disabled onchange="handleDiscoveredSelection()">
+                                        <option value="">Select a local checkpoint...</option>
+                                    </select>
+                                    <div class="form-text">Choose from locally discovered checkpoint files</div>
+                                </div>
                             </div>
 
                             <div class="mb-3">
                                 <label for="customCheckpoint" class="form-label">
-                                    Or Use Custom Checkpoint 
+                                    Or Use Custom Checkpoint Path
                                     <span class="badge bg-info">Browse</span>
                                 </label>
                                 <div class="input-group">
@@ -98,40 +124,35 @@
                                 <div class="form-text">Browse for a local checkpoint file or enter path manually</div>
                             </div>
 
+                            <div id="selectionFeedback" class="alert alert-info d-none">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <span id="feedbackMessage"></span>
+                            </div>
+
                             <div class="mb-3">
                                 <label for="testText" class="form-label">Text to Synthesize</label>
-                                <textarea class="form-control" id="testText" name="testText" rows="4"
-                                    placeholder="Enter the text you want to convert to speech...">Hello! This is a test of the voice synthesis system. How does this sound?</textarea>
-                                <div class="form-text">Enter any text you want to convert to speech</div>
+                                <textarea class="form-control" id="testText" name="text" rows="3" placeholder="Enter text to synthesize..." required></textarea>
                             </div>
 
                             <div class="mb-3">
-                                <label for="speechRate" class="form-label">Speech Rate</label>
-                                <input type="range" class="form-range" id="speechRate" name="speechRate"
-                                    min="0.5" max="2.0" step="0.1" value="1.0">
-                                <div class="d-flex justify-content-between">
-                                    <small>Slow (0.5x)</small>
-                                    <small id="speechRateValue">Normal (1.0x)</small>
-                                    <small>Fast (2.0x)</small>
+                                <label class="form-label">Voice Settings</label>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <label for="lengthScale" class="form-label">Length Scale</label>
+                                        <input type="range" class="form-range" id="lengthScale" name="length_scale" min="0.5" max="2.0" step="0.1" value="1.0">
+                                        <div class="form-text text-center" id="lengthScaleValue">1.0</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <label for="noiseScale" class="form-label">Noise Scale</label>
+                                        <input type="range" class="form-range" id="noiseScale" name="noise_scale" min="0.1" max="1.0" step="0.1" value="0.667">
+                                        <div class="form-text text-center" id="noiseScaleValue">0.667</div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="speechPitch" class="form-label">Speech Pitch</label>
-                                <input type="range" class="form-range" id="speechPitch" name="speechPitch"
-                                    min="0.5" max="2.0" step="0.1" value="1.0">
-                                <div class="d-flex justify-content-between">
-                                    <small>Low (0.5x)</small>
-                                    <small id="speechPitchValue">Normal (1.0x)</small>
-                                    <small>High (2.0x)</small>
-                                </div>
-                            </div>
-
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary btn-lg" id="generateBtn">
-                                    <i class="fas fa-play me-2"></i>Generate Speech
-                                </button>
-                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-play me-2"></i>Generate Speech
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -231,26 +252,24 @@
     <script>
         let currentAudioUrl = null;
         let currentAudioFilename = null;
+        let currentView = 'predefined'; // 'predefined' or 'discovered'
+        let lastRefreshTime = null;
 
-        // Load available languages and voices on page load
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            updateRefreshTime();
             loadLanguages();
+            refreshAllModels();
             setupEventListeners();
         });
 
         function setupEventListeners() {
-            // Speech rate slider
-            document.getElementById('speechRate').addEventListener('input', function() {
-                const value = parseFloat(this.value);
-                const display = value === 1.0 ? 'Normal (1.0x)' : `${value}x`;
-                document.getElementById('speechRateValue').textContent = display;
+            // Slider value displays
+            document.getElementById('lengthScale').addEventListener('input', function() {
+                document.getElementById('lengthScaleValue').textContent = this.value;
             });
-
-            // Speech pitch slider
-            document.getElementById('speechPitch').addEventListener('input', function() {
-                const value = parseFloat(this.value);
-                const display = value === 1.0 ? 'Normal (1.0x)' : `${value}x`;
-                document.getElementById('speechPitchValue').textContent = display;
+            document.getElementById('noiseScale').addEventListener('input', function() {
+                document.getElementById('noiseScaleValue').textContent = this.value;
             });
 
             // Form submission
@@ -258,6 +277,41 @@
                 e.preventDefault();
                 generateSpeech();
             });
+        }
+
+        function updateRefreshTime() {
+            const now = new Date();
+            lastRefreshTime = now;
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('refreshTime').textContent = timeString;
+        }
+
+        async function refreshAllModels() {
+            try {
+                // Show loading state
+                const refreshBtn = document.querySelector('[onclick="refreshAllModels()"]');
+                const originalHtml = refreshBtn.innerHTML;
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Scanning...';
+                refreshBtn.disabled = true;
+
+                // Scan both pre-trained voices and checkpoints
+                await Promise.all([
+                    loadVoices(),
+                    scanCheckpoints()
+                ]);
+
+                updateRefreshTime();
+                showFeedback('All models scanned and updated successfully', 'success');
+
+            } catch (error) {
+                console.error('Error refreshing models:', error);
+                showFeedback('Error scanning models: ' + error.message, 'danger');
+            } finally {
+                // Restore button state
+                const refreshBtn = document.querySelector('[onclick="refreshAllModels()"]');
+                refreshBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Refresh Available Models';
+                refreshBtn.disabled = false;
+            }
         }
 
         function loadLanguages() {
