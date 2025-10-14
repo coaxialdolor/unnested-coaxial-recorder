@@ -1,6 +1,17 @@
 # Experimental Dockerfile for RTX 5060 Ti (sm_120) support
 # Uses PyTorch nightly builds with CUDA 12.8
 # Based on the working WSL environment
+#
+# Key fixes applied:
+# 1. PyTorch nightly build (2.10.0.dev20251007+cu128) for sm_120 support
+# 2. TORCH_CUDA_ARCH_LIST="12.0+PTX" to generate kernels for RTX 5060 Ti
+# 3. soundfile for audio loading (torchaudio.load has issues in nightly builds)
+# 4. DataLoader with num_workers=0 (in utils/vits_training.py)
+# 5. MelSpectrogram transform device fix (in utils/vits_training.py)
+# 6. pydub and ffmpeg for export functionality
+# 7. Lightning runtime patches applied at startup
+#
+# See GPU_TRAINING_FIXES.md for detailed explanation
 
 FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
