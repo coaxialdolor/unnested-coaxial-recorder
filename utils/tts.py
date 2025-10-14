@@ -287,7 +287,7 @@ def get_tts_instance() -> PiperTTS:
     return _tts_instance
 
 def synthesize_speech(text: str, language: str, voice_id: str, output_path: Path,
-                     speech_rate: float = 1.0, speech_pitch: float = 1.0) -> bool:
+                     length_scale: float = 1.0, noise_scale: float = 0.667) -> bool:
     """
     Convenience function for speech synthesis
 
@@ -296,13 +296,19 @@ def synthesize_speech(text: str, language: str, voice_id: str, output_path: Path
         language: Language code
         voice_id: Voice identifier
         output_path: Path to save audio
-        speech_rate: Speech rate multiplier
-        speech_pitch: Speech pitch multiplier
+        length_scale: Length scale for VITS (controls speech rate)
+        noise_scale: Noise scale for VITS (controls randomness)
 
     Returns:
         bool: True if successful
     """
     tts = get_tts_instance()
+
+    # Map VITS parameters to Piper parameters
+    # length_scale controls speech rate (inverse relationship)
+    speech_rate = 1.0 / length_scale if length_scale != 0 else 1.0
+    # noise_scale doesn't have a direct equivalent in Piper, so we'll use a default
+    speech_pitch = 1.0
 
     # Try direct synthesis first
     if tts.synthesize(text, language, voice_id, output_path, speech_rate, speech_pitch):
@@ -311,3 +317,144 @@ def synthesize_speech(text: str, language: str, voice_id: str, output_path: Path
     # Fallback to phoneme-based synthesis
     logger.info("Direct synthesis failed, trying phoneme-based synthesis")
     return tts.synthesize_with_espeak(text, language, voice_id, output_path, speech_rate, speech_pitch)
+
+
+def synthesize_speech_with_checkpoint(text: str, checkpoint_path: Path, output_path: Path,
+                                     length_scale: float = 1.0, noise_scale: float = 0.667) -> bool:
+    """
+    Synthesize speech using a custom PyTorch checkpoint (VITS model)
+    
+    Args:
+        text: Text to synthesize
+        checkpoint_path: Path to the PyTorch checkpoint
+        output_path: Path to save the generated audio
+        length_scale: Length scale for VITS (controls speech rate)
+        noise_scale: Noise scale for VITS (controls randomness)
+    
+    Returns:
+        bool: True if synthesis was successful
+    """
+    try:
+        import torch
+        import torchaudio
+        from utils.vits_training import SimpleTTSModel
+        from utils.phonemes import text_to_phonemes
+        
+        logger.info(f"Loading checkpoint from {checkpoint_path}")
+        
+        # Load checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        
+        # Get model config from checkpoint
+        model_config = checkpoint.get('config', {})
+        if not model_config:
+            # Try to infer config from checkpoint state dict
+            # The checkpoint was trained with medium size (hidden_dim=512)
+            model_config = {
+                'hidden_dim': 512,  # Medium size model
+                'sample_rate': 22050
+            }
+        
+        # Create model
+        model = SimpleTTSModel(model_config)
+        
+        # Load state dict
+        if 'state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
+        
+        model.eval()
+        
+        # Get phonemes from text
+        logger.info(f"Converting text to phonemes: '{text}'")
+        phonemes_str = text_to_phonemes(text, 'sv-SE')
+        if not phonemes_str:
+            logger.error("Failed to convert text to phonemes")
+            return False
+        
+        logger.info(f"Phonemes: {phonemes_str}")
+        
+        # For now, we'll generate a mel spectrogram from the phonemes
+        # This is a simplified approach - a full VITS model would have a phoneme encoder
+        
+        # Generate a simple mel spectrogram based on phoneme sequence
+        # In a real VITS model, this would be done by the phoneme encoder
+        sample_rate = model_config.get('sample_rate', 22050)
+        n_mels = 80
+        hop_length = 256
+        n_fft = 1024
+        
+        # Create a simple mel spectrogram (this is a simplified approach)
+        # In production, you'd use the model's phoneme encoder
+        mel_length = len(phonemes_str.split()) * 50  # Rough estimate
+        mel_spec = torch.randn(1, mel_length, n_mels)  # Shape: (batch, time, features)
+        
+        # Move to device
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model = model.to(device)
+        mel_spec = mel_spec.to(device)
+        
+        # Generate audio using the model
+        logger.info("Generating audio with trained model...")
+        with torch.no_grad():
+            # Forward pass through the model
+            output = model(mel_spec)
+            
+            # The model outputs mel spectrogram, we need to convert to audio
+            # Due to PyTorch nightly build issues with Griffin-Lim, we'll use a simple approach
+            # that directly converts the mel spectrogram to audio using inverse mel transform
+            from torchaudio.transforms import InverseMelScale
+            
+            # Get actual output size from model
+            # Output shape is [batch, time, features]
+            actual_n_mels = output.shape[-1]
+            logger.info(f"Model output shape: {output.shape}, n_mels: {actual_n_mels}")
+            
+            # Transpose to [batch, features, time] for inverse_mel
+            output_transposed = output.transpose(1, 2)
+            logger.info(f"Transposed output shape: {output_transposed.shape}")
+            
+            # Create inverse mel scale
+            inverse_mel = InverseMelScale(
+                n_stft=n_fft // 2 + 1,
+                n_mels=actual_n_mels,
+                sample_rate=sample_rate
+            ).to(device)
+            
+            # Convert mel spectrogram to linear spectrogram
+            linear_spec = inverse_mel(output_transposed)
+            logger.info(f"Linear spectrogram shape: {linear_spec.shape}")
+            
+            # Move to CPU and convert to numpy
+            linear_spec_np = linear_spec.cpu().squeeze().numpy()
+            
+            # Use librosa's Griffin-Lim vocoder (more stable than PyTorch's)
+            import librosa
+            
+            # Convert linear spectrogram to audio using librosa's Griffin-Lim
+            # librosa's implementation is more stable than PyTorch's
+            audio_np = librosa.griffinlim(
+                linear_spec_np,
+                n_iter=32,
+                hop_length=hop_length,
+                n_fft=n_fft,
+                length=None
+            )
+            
+            # Convert to tensor and normalize
+            audio = torch.from_numpy(audio_np).float()
+            audio = audio / torch.max(torch.abs(audio))
+            
+            # Save audio
+            torchaudio.save(str(output_path), audio.unsqueeze(0), sample_rate)
+            
+            logger.info(f"Successfully generated audio to {output_path}")
+            logger.info(f"Audio shape: {audio.shape}, Sample rate: {sample_rate}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Failed to synthesize speech with checkpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return False

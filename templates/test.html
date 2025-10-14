@@ -150,7 +150,7 @@
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary w-100">
+                            <button type="submit" class="btn btn-primary w-100" id="generateBtn">
                                 <i class="fas fa-play me-2"></i>Generate Speech
                             </button>
                         </form>
@@ -536,8 +536,8 @@
             const language = document.getElementById('language').value;
             const voiceId = document.getElementById('voice').value;
             const text = document.getElementById('testText').value.trim();
-            const speechRate = parseFloat(document.getElementById('speechRate').value);
-            const speechPitch = parseFloat(document.getElementById('speechPitch').value);
+            const lengthScale = parseFloat(document.getElementById('lengthScale').value);
+            const noiseScale = parseFloat(document.getElementById('noiseScale').value);
 
             if (!language || !voiceId) {
                 alert('Please select a language and voice model.');
@@ -561,8 +561,8 @@
             formData.append('language', language);
             formData.append('voice_id', voiceId);
             formData.append('text', text);
-            formData.append('speech_rate', speechRate);
-            formData.append('speech_pitch', speechPitch);
+            formData.append('length_scale', lengthScale);
+            formData.append('noise_scale', noiseScale);
 
             // Generate speech
             fetch('/api/test/generate', {

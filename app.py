@@ -3201,25 +3201,34 @@ async def generate_test_speech(
     language: str = Form(...),
     voice_id: str = Form(...),
     text: str = Form(...),
-    speech_rate: float = Form(1.0),
-    speech_pitch: float = Form(1.0)
+    length_scale: float = Form(1.0),
+    noise_scale: float = Form(0.667)
 ):
     """Generate speech from text using a voice model"""
     try:
         if not CHECKPOINT_SUPPORT:
             raise HTTPException(status_code=503, detail="Checkpoint support not available")
 
-        # Get checkpoint manager
-        checkpoint_manager = get_checkpoint_manager()
+        # Handle custom checkpoint paths
+        if voice_id.startswith("custom:"):
+            # Custom checkpoint path (e.g., "custom:models/checkpoints/final_model.ckpt")
+            custom_path = voice_id.replace("custom:", "")
+            checkpoint_path = Path(custom_path)
+            
+            if not checkpoint_path.exists():
+                raise HTTPException(status_code=404, detail=f"Custom checkpoint not found: {custom_path}")
+        else:
+            # Get checkpoint manager for pre-trained checkpoints
+            checkpoint_manager = get_checkpoint_manager()
 
-        # Check if checkpoint is available and downloaded
-        if not checkpoint_manager.is_checkpoint_downloaded(language, voice_id):
-            raise HTTPException(status_code=404, detail=f"Checkpoint {language}.{voice_id} not downloaded")
+            # Check if checkpoint is available and downloaded
+            if not checkpoint_manager.is_checkpoint_downloaded(language, voice_id):
+                raise HTTPException(status_code=404, detail=f"Checkpoint {language}.{voice_id} not downloaded")
 
-        # Get checkpoint path
-        checkpoint_path = checkpoint_manager.get_checkpoint_path(language, voice_id)
-        if not checkpoint_path or not checkpoint_path.exists():
-            raise HTTPException(status_code=404, detail="Checkpoint file not found")
+            # Get checkpoint path
+            checkpoint_path = checkpoint_manager.get_checkpoint_path(language, voice_id)
+            if not checkpoint_path or not checkpoint_path.exists():
+                raise HTTPException(status_code=404, detail="Checkpoint file not found")
 
         # Generate unique filename
         import uuid
@@ -3227,7 +3236,7 @@ async def generate_test_speech(
         output_path = TEST_AUDIO_DIR / filename
 
         # Create real TTS audio file
-        success = create_test_audio_with_voice(text, output_path, language, voice_id, speech_rate, speech_pitch)
+        success = create_test_audio_with_voice(text, output_path, checkpoint_path, language, length_scale, noise_scale)
 
         if not success:
             raise HTTPException(status_code=500, detail="Failed to generate audio")
@@ -3243,8 +3252,8 @@ async def generate_test_speech(
             "language": language,
             "voice_id": voice_id,
             "text": text,
-            "speech_rate": speech_rate,
-            "speech_pitch": speech_pitch
+            "length_scale": length_scale,
+            "noise_scale": noise_scale
         }
 
     except HTTPException:
@@ -3274,28 +3283,36 @@ async def get_test_audio(filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error serving audio: {str(e)}")
 
-def create_test_audio_with_voice(text: str, output_path: Path, language: str, voice_id: str,
-                                speech_rate: float = 1.0, speech_pitch: float = 1.0) -> bool:
+def create_test_audio_with_voice(text: str, output_path: Path, checkpoint_path: Path, language: str,
+                                length_scale: float = 1.0, noise_scale: float = 0.667) -> bool:
     """
     Create a test audio file using real TTS synthesis with specific voice
+    
+    Args:
+        text: Text to synthesize
+        output_path: Path to save audio
+        checkpoint_path: Path to the checkpoint file
+        language: Language code
+        length_scale: Length scale for VITS
+        noise_scale: Noise scale for VITS
     """
     try:
         # Import TTS utilities
-        from utils.tts import synthesize_speech
+        from utils.tts import synthesize_speech_with_checkpoint
 
-        # Try to synthesize speech with the specified voice
-        success = synthesize_speech(text, language, voice_id, output_path, speech_rate, speech_pitch)
+        # Try to synthesize speech with the specified checkpoint
+        success = synthesize_speech_with_checkpoint(text, checkpoint_path, output_path, length_scale, noise_scale)
 
         if success:
             return True
 
         # Fallback to placeholder if TTS fails
         print("TTS synthesis failed, using placeholder audio")
-        return create_test_audio_fallback(text, output_path, speech_rate, speech_pitch)
+        return create_test_audio_fallback(text, output_path, length_scale, noise_scale)
 
     except Exception as e:
         print(f"Error creating test audio: {e}")
-        return create_test_audio_fallback(text, output_path, speech_rate, speech_pitch)
+        return create_test_audio_fallback(text, output_path, length_scale, noise_scale)
 
 def create_test_audio_fallback(text: str, output_path: Path, speech_rate: float = 1.0, speech_pitch: float = 1.0) -> bool:
     """
