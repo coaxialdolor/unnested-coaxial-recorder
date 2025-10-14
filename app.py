@@ -2402,15 +2402,39 @@ async def get_gpu_status():
     """Check if GPU is available for training"""
     try:
         import torch
+        from utils.gpu_compat import check_gpu_compatibility
+        
         gpu_available = torch.cuda.is_available()
         gpu_count = torch.cuda.device_count() if gpu_available else 0
+        
+        # Get detailed GPU compatibility info
+        compat_info = check_gpu_compatibility()
+        
+        # Test if GPU actually works
+        gpu_working = False
+        if gpu_available and gpu_count > 0:
+            try:
+                # Quick test to verify GPU can run operations
+                device = torch.device('cuda:0')
+                test_tensor = torch.randn(10, 10).to(device)
+                _ = test_tensor @ test_tensor.T
+                gpu_working = True
+            except Exception:
+                gpu_working = False
+        
         return {
             "available": gpu_available,
+            "working": gpu_working,
             "count": gpu_count,
-            "devices": [torch.cuda.get_device_name(i) for i in range(gpu_count)] if gpu_available else []
+            "devices": [torch.cuda.get_device_name(i) for i in range(gpu_count)] if gpu_available else [],
+            "compatible": compat_info.get("compatible", True),
+            "compute_capability": compat_info.get("compute_capability"),
+            "pytorch_version": compat_info.get("pytorch_version"),
+            "cuda_version": compat_info.get("cuda_version"),
+            "message": "[OK] GPU is ready for training" if gpu_working else "[WARNING] GPU detected but not functional" if gpu_available else "[INFO] No GPU available - will use CPU"
         }
     except ImportError:
-        return {"available": False, "count": 0, "devices": [], "error": "PyTorch not installed"}
+        return {"available": False, "working": False, "count": 0, "devices": [], "error": "PyTorch not installed"}
 
 @app.post("/api/train/start")
 async def start_training(

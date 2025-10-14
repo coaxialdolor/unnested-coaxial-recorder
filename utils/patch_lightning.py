@@ -7,6 +7,7 @@ Based on Copilot recommendations for proper GPU detection and device configurati
 import os
 import sys
 import importlib.util
+import argparse
 from pathlib import Path
 import logging
 
@@ -166,6 +167,18 @@ def patch_lightning_for_rtx5060ti():
 
 
 if __name__ == "__main__":
-    success = patch_lightning_for_rtx5060ti()
+    parser = argparse.ArgumentParser(description='Patch Lightning for RTX 5060 Ti compatibility')
+    parser.add_argument('--apply-runtime', action='store_true', 
+                       help='Only apply runtime patches (skip file modifications)')
+    args = parser.parse_args()
+    
+    if args.apply_runtime:
+        # Only run runtime patches
+        logger.info("=== Applying Runtime Patches Only ===")
+        success = apply_runtime_patches()
+    else:
+        # Run full patching
+        success = patch_lightning_for_rtx5060ti()
+    
     sys.exit(0 if success else 1)
 

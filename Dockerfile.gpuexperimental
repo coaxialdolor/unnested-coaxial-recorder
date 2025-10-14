@@ -1,0 +1,98 @@
+# Experimental Dockerfile for RTX 5060 Ti (sm_120) support
+# Uses PyTorch nightly builds with CUDA 12.8
+# Based on the working WSL environment
+
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    TORCH_CUDA_ARCH_LIST="12.0+PTX" \
+    CUDA_HOME=/usr/local/cuda
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    git \
+    curl \
+    wget \
+    build-essential \
+    ffmpeg \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symbolic link for python
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python
+
+# Upgrade pip
+RUN pip install --upgrade pip setuptools wheel
+
+# Install PyTorch nightly with CUDA 12.8
+# Using exact version from working environment
+RUN pip install --pre \
+    torch==2.10.0.dev20251007+cu128 \
+    torchvision==0.25.0.dev20251007+cu128 \
+    torchaudio==2.8.0.dev20251007+cu128 \
+    --index-url https://download.pytorch.org/whl/nightly/cu128
+
+# Install base requirements
+RUN pip install \
+    fastapi \
+    uvicorn \
+    python-multipart \
+    aiofiles \
+    jinja2 \
+    python-dotenv
+
+# Install training requirements
+RUN pip install \
+    pytorch-lightning \
+    transformers \
+    datasets \
+    accelerate \
+    evaluate \
+    librosa \
+    soundfile \
+    scipy \
+    scikit-learn \
+    tensorboard \
+    wandb \
+    phonemizer \
+    tqdm \
+    matplotlib \
+    seaborn
+
+# Install export requirements
+RUN pip install onnxruntime pydub
+
+# Install Montreal Forced Aligner
+RUN pip install montreal-forced-aligner
+
+# Download MFA models
+RUN mfa model download acoustic english_us_arpa || true
+RUN mfa model download dictionary english_us_arpa || true
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p voices output logs checkpoints
+
+# Copy and setup entrypoint script
+COPY docker-entrypoint-experimental.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint-experimental.sh
+
+# Expose port for web interface
+EXPOSE 8000
+
+# Entrypoint script will run GPU checks and patches before starting app
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint-experimental.sh"]
+
+# Default command
+CMD ["python", "app.py"]
+

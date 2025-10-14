@@ -190,20 +190,20 @@ def print_gpu_status():
             print(f"  Compute Capability: {device['compute_capability']}")
 
         if status['compatible']:
-            print("\n✅ GPU is compatible and ready for training")
+            print("\n[OK] GPU is compatible and ready for training")
         else:
-            print("\n❌ GPU compatibility issue detected")
+            print("\n[ERROR] GPU compatibility issue detected")
 
         if status['warnings']:
             print("\nWarnings:")
             for warning in status['warnings']:
-                print(f"  ⚠️  {warning}")
+                print(f"  [WARNING] {warning}")
 
         if status['recommended_action']:
             print("\nRecommended action:")
             print(f"  {status['recommended_action']}")
     else:
-        print("\n⚠️  No CUDA device available - will use CPU")
+        print("\n[INFO] No CUDA device available - will use CPU")
         if status['warnings']:
             for warning in status['warnings']:
                 print(f"  {warning}")

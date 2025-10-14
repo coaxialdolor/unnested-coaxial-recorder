@@ -76,7 +76,15 @@ class VoiceDataset(Dataset):
         # Convert Path to string if needed
         if isinstance(audio_path, Path):
             audio_path = str(audio_path)
-        waveform, sr = torchaudio.load(audio_path)
+        
+        # Use soundfile directly (torchaudio.load has issues with PyTorch nightly)
+        import soundfile as sf
+        waveform, sr = sf.read(audio_path)
+        waveform = torch.from_numpy(waveform).float()
+        if len(waveform.shape) == 1:
+            waveform = waveform.unsqueeze(0)
+        else:
+            waveform = waveform.T
 
         # Resample if needed
         if sr != self.sample_rate:
@@ -187,7 +195,7 @@ class SimpleTTSModel(L.LightningModule if LIGHTNING_AVAILABLE else nn.Module):
             n_fft=1024,
             hop_length=256,
             n_mels=80
-        )
+        ).to(audio.device)  # Move transform to same device as audio
 
         if audio.dim() == 1:
             audio = audio.unsqueeze(0)
@@ -255,7 +263,7 @@ def train_tts_model(
             train_dataset,
             batch_size=config.get('batch_size', 16),
             shuffle=True,
-            num_workers=4,
+            num_workers=0,  # Disable multiprocessing to avoid torchaudio crashes
             collate_fn=collate_fn
         )
 

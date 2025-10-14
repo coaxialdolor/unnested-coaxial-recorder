@@ -48,9 +48,10 @@ SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
 # Upgrade pip
 RUN pip install --upgrade pip
 
-# Install PyTorch with CUDA 12.1 (compatible with RTX 5060 Ti and newer GPUs)
-# Using CUDA 12.1 ensures compatibility with compute capability 8.9+
-RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch with CUDA 12.8 (required for RTX 5060 Ti sm_120 support)
+# RTX 50-series (compute capability 12.0) requires CUDA 12.8+
+ENV TORCH_CUDA_ARCH_LIST="12.0"
+RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128
 
 # Install PyTorch Lightning for training (RTX 5060 Ti optimized)
 RUN pip install lightning>=2.0.0
@@ -89,6 +90,14 @@ COPY --from=builder $CONDA_DIR $CONDA_DIR
 # Copy application code
 COPY . .
 
+# Install application in editable mode to compile native extensions for current GPU
+# This is critical for RTX 5060 Ti (sm_120) support
+RUN conda run -n coaxial pip install -e . || echo "Editable install failed, continuing..."
+
+# Copy and setup entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create necessary directories
 RUN mkdir -p voices output logs checkpoints
 
@@ -101,6 +110,9 @@ SHELL ["conda", "run", "-n", "coaxial", "/bin/bash", "-c"]
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
+
+# Entrypoint script will run GPU checks and patches before starting app
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Default command
 CMD ["conda", "run", "--no-capture-output", "-n", "coaxial", "python", "app.py"]
