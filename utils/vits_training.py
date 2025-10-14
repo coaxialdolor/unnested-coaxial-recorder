@@ -37,6 +37,8 @@ except ImportError:
 
 # Apply runtime GPU optimizations (RTX 5060 Ti compatibility)
 if LIGHTNING_AVAILABLE:
+logger = logging.getLogger(__name__)
+
     try:
         import torch
         if torch.cuda.is_available():
@@ -52,8 +54,6 @@ if LIGHTNING_AVAILABLE:
                     logger.info(f"GPU optimizations enabled for compute capability {cap[0]}.{cap[1]}")
     except Exception as e:
         logger.warning(f"Could not apply GPU optimizations: {e}")
-
-logger = logging.getLogger(__name__)
 
 
 class VoiceDataset(Dataset):
