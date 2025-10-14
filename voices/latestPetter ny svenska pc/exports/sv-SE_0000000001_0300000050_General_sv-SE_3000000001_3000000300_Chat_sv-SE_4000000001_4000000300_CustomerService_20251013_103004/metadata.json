@@ -1,0 +1,877 @@
+[
+  {
+    "filename": "0001_sv-SE_General_20251013_095301.wav",
+    "sentence": "Om du har problem med att kryssen du fyllt i inte sparas kan det bero på att minnet blivit fullt.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 0,
+    "timestamp": "20251013_095301"
+  },
+  {
+    "filename": "0002_sv-SE_General_20251013_095318.wav",
+    "sentence": "För några år sedan kom nya tekniker för att odla inomhus och många hoppades på en både lukrativ och klimatvänlig bransch.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 1,
+    "timestamp": "20251013_095318"
+  },
+  {
+    "filename": "0003_sv-SE_General_20251013_095439.wav",
+    "sentence": "Men om du redan har löst många kryss så behöver du rensa minnet för att det ska börja fungera igen.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 2,
+    "timestamp": "20251013_095439"
+  },
+  {
+    "filename": "0004_sv-SE_General_20251013_095452.wav",
+    "sentence": "Längst upp på sidan finns en symbol som ser ut som en rund pil.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 3,
+    "timestamp": "20251013_095452"
+  },
+  {
+    "filename": "0005_sv-SE_General_20251013_095517.wav",
+    "sentence": "Hög frånvaro vid voteringar i riksdagen ska kunna ge indraget arvode för skolkande ledamöter, enligt förslag från en parlamentarisk kommitté som stöds av samtliga riksdagspartier.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 4,
+    "timestamp": "20251013_095517"
+  },
+  {
+    "filename": "0006_sv-SE_General_20251013_095533.wav",
+    "sentence": "Försäljningen av vitaminer, kosttillskott och andra egenvårdande produkter fortsätter att öka och bara de senaste fem åren har branschen växt med över 25 procent.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 5,
+    "timestamp": "20251013_095533"
+  },
+  {
+    "filename": "0007_sv-SE_General_20251013_095546.wav",
+    "sentence": "Efter att ha analyserat fossiler har forskare hittat en ny art av flygödla, som en gång i tiden flugit och fångat fisk i vad som i dag är Australien.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 6,
+    "timestamp": "20251013_095546"
+  },
+  {
+    "filename": "0008_sv-SE_General_20251013_095559.wav",
+    "sentence": "Men många lojalitetsprogram kräver att konsumenter har ett fysiskt kort med sig, vilket kan vara opraktiskt.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 7,
+    "timestamp": "20251013_095559"
+  },
+  {
+    "filename": "0009_sv-SE_General_20251013_095617.wav",
+    "sentence": "Hur vi åldras skiljer sig mycket från person till person, men även vid hög ålder kan de flesta påverka sin hälsa positivt.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 8,
+    "timestamp": "20251013_095617"
+  },
+  {
+    "filename": "0010_sv-SE_General_20251013_095636.wav",
+    "sentence": "Om pensionsåldern höjs som planerat, kommer det innebära att staten tillförs fem miljarder kronor per år i ökad tillväxt och minskade utgifter.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 9,
+    "timestamp": "20251013_095636"
+  },
+  {
+    "filename": "0011_sv-SE_General_20251013_095733.wav",
+    "sentence": "Teknik som omvandlar koldioxidutsläpp till nytt bränsle kan göra flyget fossilfritt med de plan som redan finns.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 10,
+    "timestamp": "20251013_095733"
+  },
+  {
+    "filename": "0012_sv-SE_General_20251013_095800.wav",
+    "sentence": "Ett förändrat klimat ser ut att slå hårdast mot sektorer som växtodling, djuruppfödning och dricksvattenproduktion.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 11,
+    "timestamp": "20251013_095800"
+  },
+  {
+    "filename": "0013_sv-SE_General_20251013_095832.wav",
+    "sentence": "Se till att du är i inloggat läge här på kundservicewebben, gå till Mitt konto och därefter Uppehåll i prenumerationen.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 12,
+    "timestamp": "20251013_095832"
+  },
+  {
+    "filename": "0014_sv-SE_General_20251013_095858.wav",
+    "sentence": "Om norra Europa ska fortsätta att vara ett attraktivt semestermål måste det till både produkter av hög kvalitet och fler alternativ för perioder av dåligt väder.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 13,
+    "timestamp": "20251013_095858"
+  },
+  {
+    "filename": "0001_sv-SE_Chat_20251013_095929.wav",
+    "sentence": "Jag och Ida kommer flyga till Rom under lovet.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 0,
+    "timestamp": "20251013_095929"
+  },
+  {
+    "filename": "0002_sv-SE_Chat_20251013_095935.wav",
+    "sentence": "Var tecknar jag en prenumeration?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 1,
+    "timestamp": "20251013_095935"
+  },
+  {
+    "filename": "0003_sv-SE_Chat_20251013_095941.wav",
+    "sentence": "Hela familjen reser till Maldiverna om två veckor.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 2,
+    "timestamp": "20251013_095941"
+  },
+  {
+    "filename": "0004_sv-SE_Chat_20251013_095948.wav",
+    "sentence": "Vi har inte bokat bord på restaurangen än, men det kanske vi borde göra.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 3,
+    "timestamp": "20251013_095948"
+  },
+  {
+    "filename": "0005_sv-SE_Chat_20251013_095954.wav",
+    "sentence": "Det är verkligen omtänksamt av dig att tänka på mig.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 4,
+    "timestamp": "20251013_095954"
+  },
+  {
+    "filename": "0006_sv-SE_Chat_20251013_095959.wav",
+    "sentence": "Nej, du behöver inte betala något.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 5,
+    "timestamp": "20251013_095959"
+  },
+  {
+    "filename": "0007_sv-SE_Chat_20251013_100006.wav",
+    "sentence": "Okej, men då gör vi så i stället, perfekt!",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 6,
+    "timestamp": "20251013_100006"
+  },
+  {
+    "filename": "0008_sv-SE_Chat_20251013_100011.wav",
+    "sentence": "Jag är glad att vi är överens om det.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 7,
+    "timestamp": "20251013_100011"
+  },
+  {
+    "filename": "0009_sv-SE_Chat_20251013_100018.wav",
+    "sentence": "Eftersom vi flyger om en vecka kommer jag troligtvis börja packa till helgen.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 8,
+    "timestamp": "20251013_100018"
+  },
+  {
+    "filename": "0010_sv-SE_Chat_20251013_100030.wav",
+    "sentence": "Själv har jag inte riktigt hunnit planera något än.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 9,
+    "timestamp": "20251013_100030"
+  },
+  {
+    "filename": "0011_sv-SE_Chat_20251013_100035.wav",
+    "sentence": "Har du varit i Göteborg någon gång?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 10,
+    "timestamp": "20251013_100035"
+  },
+  {
+    "filename": "0012_sv-SE_Chat_20251013_100041.wav",
+    "sentence": "Är det varmt eller kallt i Grekland i november?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 11,
+    "timestamp": "20251013_100041"
+  },
+  {
+    "filename": "0013_sv-SE_Chat_20251013_100047.wav",
+    "sentence": "Jag behöver köpa solkräm, annars kommer jag bränna mig.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 12,
+    "timestamp": "20251013_100047"
+  },
+  {
+    "filename": "0014_sv-SE_Chat_20251013_100053.wav",
+    "sentence": "Om inte får vi nog satsa på att ta bussen.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 13,
+    "timestamp": "20251013_100053"
+  },
+  {
+    "filename": "0015_sv-SE_Chat_20251013_100104.wav",
+    "sentence": "Jag verkligen älskar sol och bad.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 14,
+    "timestamp": "20251013_100104"
+  },
+  {
+    "filename": "0016_sv-SE_Chat_20251013_100114.wav",
+    "sentence": "När jag var i Spanien hyrde jag häst i två dagar.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 15,
+    "timestamp": "20251013_100114"
+  },
+  {
+    "filename": "0017_sv-SE_Chat_20251013_100129.wav",
+    "sentence": "Det är väldigt varmt på stranden, så vi får inte glömma att ta med vatten.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 16,
+    "timestamp": "20251013_100129"
+  },
+  {
+    "filename": "0018_sv-SE_Chat_20251013_100134.wav",
+    "sentence": "Ska vi köra igång direkt?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 17,
+    "timestamp": "20251013_100134"
+  },
+  {
+    "filename": "0019_sv-SE_Chat_20251013_100142.wav",
+    "sentence": "Jag älskar också den franska kulturen och maten.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 18,
+    "timestamp": "20251013_100142"
+  },
+  {
+    "filename": "0020_sv-SE_Chat_20251013_100149.wav",
+    "sentence": "Jag följer väldigt gärna med.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 19,
+    "timestamp": "20251013_100149"
+  },
+  {
+    "filename": "0021_sv-SE_Chat_20251013_100156.wav",
+    "sentence": "Vi får gärna övernatta hos min släkting i Stockholm.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 20,
+    "timestamp": "20251013_100156"
+  },
+  {
+    "filename": "0022_sv-SE_Chat_20251013_100204.wav",
+    "sentence": "Du kommer behöva dela med dig.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 21,
+    "timestamp": "20251013_100204"
+  },
+  {
+    "filename": "0023_sv-SE_Chat_20251013_100213.wav",
+    "sentence": "Då räknar jag med att ni alla kommer på lördag, så kul!",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 22,
+    "timestamp": "20251013_100213"
+  },
+  {
+    "filename": "0024_sv-SE_Chat_20251013_100217.wav",
+    "sentence": "Jag vill inte åka själv.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 23,
+    "timestamp": "20251013_100217"
+  },
+  {
+    "filename": "0025_sv-SE_Chat_20251013_100221.wav",
+    "sentence": "Kan vi inte sova på hotell?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 24,
+    "timestamp": "20251013_100221"
+  },
+  {
+    "filename": "0026_sv-SE_Chat_20251013_100228.wav",
+    "sentence": "Hon är min bästa vän från skoltiden.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 25,
+    "timestamp": "20251013_100228"
+  },
+  {
+    "filename": "0027_sv-SE_Chat_20251013_100233.wav",
+    "sentence": "Hur dags börjar matchen på söndag?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 26,
+    "timestamp": "20251013_100233"
+  },
+  {
+    "filename": "0028_sv-SE_Chat_20251013_100241.wav",
+    "sentence": "Det är soligt ute, men ändå ganska kallt.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 27,
+    "timestamp": "20251013_100241"
+  },
+  {
+    "filename": "0029_sv-SE_Chat_20251013_100258.wav",
+    "sentence": "Så roligt det ska bli att träffa din syster för första gången.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 28,
+    "timestamp": "20251013_100258"
+  },
+  {
+    "filename": "0030_sv-SE_Chat_20251013_100306.wav",
+    "sentence": "Nu börjar det bli hög tid att tänka på julfirandet.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 29,
+    "timestamp": "20251013_100306"
+  },
+  {
+    "filename": "0031_sv-SE_Chat_20251013_100314.wav",
+    "sentence": "Jag jobbade en kort tid på café, mest för att jag ville prova på något nytt.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 30,
+    "timestamp": "20251013_100314"
+  },
+  {
+    "filename": "0032_sv-SE_Chat_20251013_100323.wav",
+    "sentence": "Vem älskar inte att åka på semester?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 31,
+    "timestamp": "20251013_100323"
+  },
+  {
+    "filename": "0033_sv-SE_Chat_20251013_100331.wav",
+    "sentence": "Kommer du resa till Thailand fler gånger tror du?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 32,
+    "timestamp": "20251013_100331"
+  },
+  {
+    "filename": "0034_sv-SE_Chat_20251013_100337.wav",
+    "sentence": "I morgon släpps biljetterna till den nya Bond-filmen.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 33,
+    "timestamp": "20251013_100337"
+  },
+  {
+    "filename": "0035_sv-SE_Chat_20251013_100342.wav",
+    "sentence": "Jag vill gärna höra allt om din resa!",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 34,
+    "timestamp": "20251013_100342"
+  },
+  {
+    "filename": "0036_sv-SE_Chat_20251013_100346.wav",
+    "sentence": "Vi kan ta min bil i stället för taxi.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 35,
+    "timestamp": "20251013_100346"
+  },
+  {
+    "filename": "0037_sv-SE_Chat_20251013_100358.wav",
+    "sentence": "Som min egen chef kan jag välja själv när jag tar ledigt.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 36,
+    "timestamp": "20251013_100358"
+  },
+  {
+    "filename": "0038_sv-SE_Chat_20251013_100413.wav",
+    "sentence": "Jag skriver min slutuppsats nu och i vår tar jag examen.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 37,
+    "timestamp": "20251013_100413"
+  },
+  {
+    "filename": "0039_sv-SE_Chat_20251013_100420.wav",
+    "sentence": "En spontan idé, kan vi inte gå ut och äta ikväll?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 38,
+    "timestamp": "20251013_100420"
+  },
+  {
+    "filename": "0040_sv-SE_Chat_20251013_100427.wav",
+    "sentence": "Jag går just nu i mitt sista år på IT-gymnasiet.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 39,
+    "timestamp": "20251013_100427"
+  },
+  {
+    "filename": "0041_sv-SE_Chat_20251013_100434.wav",
+    "sentence": "Kul att ni bjöd med mig på konserten, tack!",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 40,
+    "timestamp": "20251013_100434"
+  },
+  {
+    "filename": "0042_sv-SE_Chat_20251013_100439.wav",
+    "sentence": "Glöm inte att berömma dig själv också.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 41,
+    "timestamp": "20251013_100439"
+  },
+  {
+    "filename": "0043_sv-SE_Chat_20251013_100448.wav",
+    "sentence": "Jag skulle också vilja lära mig ett nytt språk.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 42,
+    "timestamp": "20251013_100448"
+  },
+  {
+    "filename": "0044_sv-SE_Chat_20251013_100459.wav",
+    "sentence": "Kom gärna en stund innan passet börjar, så att det inte blir stressigt.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 43,
+    "timestamp": "20251013_100459"
+  },
+  {
+    "filename": "0045_sv-SE_Chat_20251013_100507.wav",
+    "sentence": "Vi stannar gärna över natten, bara det inte är till extra besvär.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 44,
+    "timestamp": "20251013_100507"
+  },
+  {
+    "filename": "0046_sv-SE_Chat_20251013_100512.wav",
+    "sentence": "Det viktigaste är att vi hittar på något tillsammans, eller hur?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 45,
+    "timestamp": "20251013_100512"
+  },
+  {
+    "filename": "0047_sv-SE_Chat_20251013_100519.wav",
+    "sentence": "Jag känner till Oslo väldigt väl, trots att jag aldrig varit där.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 46,
+    "timestamp": "20251013_100519"
+  },
+  {
+    "filename": "0048_sv-SE_Chat_20251013_100531.wav",
+    "sentence": "Det är väldigt sällan jag läser en vanlig bok numera.",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 47,
+    "timestamp": "20251013_100531"
+  },
+  {
+    "filename": "0049_sv-SE_Chat_20251013_100545.wav",
+    "sentence": "Är det så varmt ute så man kan gå runt i shorts?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 48,
+    "timestamp": "20251013_100545"
+  },
+  {
+    "filename": "0050_sv-SE_Chat_20251013_100555.wav",
+    "sentence": "Hittar du till verkstaden, eller vill du ha en vägbeskrivning?",
+    "prompt_list": "sv-SE_3000000001_3000000300_Chat",
+    "prompt_index": 49,
+    "timestamp": "20251013_100555"
+  },
+  {
+    "filename": "0001_sv-SE_CustomerService_20251013_100606.wav",
+    "sentence": "Hej och välkommen till kundtjänst!",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 0,
+    "timestamp": "20251013_100606"
+  },
+  {
+    "filename": "0002_sv-SE_CustomerService_20251013_100612.wav",
+    "sentence": "Jag kan självklart hjälpa dig med ditt ärende via telefon.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 1,
+    "timestamp": "20251013_100612"
+  },
+  {
+    "filename": "0003_sv-SE_CustomerService_20251013_100622.wav",
+    "sentence": "Våra ordinarie öppettider är mellan klockan 8 och 17 på vardagar.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 2,
+    "timestamp": "20251013_100622"
+  },
+  {
+    "filename": "0004_sv-SE_CustomerService_20251013_100632.wav",
+    "sentence": "Är du kund hos oss sen tidigare?",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 3,
+    "timestamp": "20251013_100632"
+  },
+  {
+    "filename": "0005_sv-SE_CustomerService_20251013_100637.wav",
+    "sentence": "Den här produkten finns att köpa både online och i butik.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 4,
+    "timestamp": "20251013_100637"
+  },
+  {
+    "filename": "0006_sv-SE_CustomerService_20251013_100645.wav",
+    "sentence": "Jag ska se om vi har några fysiska återförsäljare på din ort.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 5,
+    "timestamp": "20251013_100645"
+  },
+  {
+    "filename": "0007_sv-SE_CustomerService_20251013_100651.wav",
+    "sentence": "Just den här varan säljer vi tyvärr bara i våra fysiska butiker.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 6,
+    "timestamp": "20251013_100651"
+  },
+  {
+    "filename": "0008_sv-SE_CustomerService_20251013_100659.wav",
+    "sentence": "Hos oss gäller alltid öppet köp i 30 dagar.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 7,
+    "timestamp": "20251013_100659"
+  },
+  {
+    "filename": "0009_sv-SE_CustomerService_20251013_100705.wav",
+    "sentence": "Du har ett års bytesrätt på alla varor, både i butik och online.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 8,
+    "timestamp": "20251013_100705"
+  },
+  {
+    "filename": "0010_sv-SE_CustomerService_20251013_100718.wav",
+    "sentence": "Hela utbudet i vår butik finns även att beställa på webben.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 9,
+    "timestamp": "20251013_100718"
+  },
+  {
+    "filename": "0011_sv-SE_CustomerService_20251013_100730.wav",
+    "sentence": "Vårt mål är att leverera alla ordrar inom 24 timmar.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 10,
+    "timestamp": "20251013_100730"
+  },
+  {
+    "filename": "0012_sv-SE_CustomerService_20251013_100737.wav",
+    "sentence": "Vår prisgaranti gäller i 30 dagar från inköpsdatumet.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 11,
+    "timestamp": "20251013_100737"
+  },
+  {
+    "filename": "0013_sv-SE_CustomerService_20251013_100832.wav",
+    "sentence": "Det är möjligt att antingen hämta varan i vår butik eller välja hemleverans.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 12,
+    "timestamp": "20251013_100832"
+  },
+  {
+    "filename": "0014_sv-SE_CustomerService_20251013_100839.wav",
+    "sentence": "Frakten är gratis vid köp över 500 kr.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 13,
+    "timestamp": "20251013_100839"
+  },
+  {
+    "filename": "0015_sv-SE_CustomerService_20251013_100849.wav",
+    "sentence": "Om du vill få din vara extra snabbt erbjuder vi expressfrakt till en låg extra kostnad.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 14,
+    "timestamp": "20251013_100849"
+  },
+  {
+    "filename": "0016_sv-SE_CustomerService_20251013_100905.wav",
+    "sentence": "Det går bra att returnera varan trots att du öppnat förpackningen och provat produkten.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 15,
+    "timestamp": "20251013_100905"
+  },
+  {
+    "filename": "0017_sv-SE_CustomerService_20251013_100913.wav",
+    "sentence": "Vi erbjuder kostnadsfri betalning mot faktura i 30 dagar.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 16,
+    "timestamp": "20251013_100913"
+  },
+  {
+    "filename": "0018_sv-SE_CustomerService_20251013_100925.wav",
+    "sentence": "Ångerrätten gäller i 14 dagar från det att du har tagit emot varan.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 17,
+    "timestamp": "20251013_100925"
+  },
+  {
+    "filename": "0019_sv-SE_CustomerService_20251013_100955.wav",
+    "sentence": "Om det är något som inte passar har du 30 dagar på dig att göra en retur.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 18,
+    "timestamp": "20251013_100955"
+  },
+  {
+    "filename": "0020_sv-SE_CustomerService_20251013_101003.wav",
+    "sentence": "Det går bra att betala med kontanter eller kort i våra butiker.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 19,
+    "timestamp": "20251013_101003"
+  },
+  {
+    "filename": "0021_sv-SE_CustomerService_20251013_101010.wav",
+    "sentence": "I vår webbshop finns även möjlighet att betala mot faktura.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 20,
+    "timestamp": "20251013_101010"
+  },
+  {
+    "filename": "0022_sv-SE_CustomerService_20251013_101021.wav",
+    "sentence": "När du har ett kundkonto hos oss kan du dela upp betalningen på 12, 24 eller 36 månader.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 21,
+    "timestamp": "20251013_101021"
+  },
+  {
+    "filename": "0023_sv-SE_CustomerService_20251013_101027.wav",
+    "sentence": "Köp som görs före klockan 12 levereras vanligtvis nästa dag.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 22,
+    "timestamp": "20251013_101027"
+  },
+  {
+    "filename": "0024_sv-SE_CustomerService_20251013_101036.wav",
+    "sentence": "Det går att få paketet hem till dörren eller välja upphämtning hos närmaste postombud.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 23,
+    "timestamp": "20251013_101036"
+  },
+  {
+    "filename": "0025_sv-SE_CustomerService_20251013_101047.wav",
+    "sentence": "Du kommer att få ett mail när leveransen lämnar vårt lager.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 24,
+    "timestamp": "20251013_101047"
+  },
+  {
+    "filename": "0026_sv-SE_CustomerService_20251013_101054.wav",
+    "sentence": "Vilken adress vill du att paketet ska skickas till?",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 25,
+    "timestamp": "20251013_101054"
+  },
+  {
+    "filename": "0027_sv-SE_CustomerService_20251013_101103.wav",
+    "sentence": "Jag ger dig gärna mer information om våra olika fraktalternativ.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 26,
+    "timestamp": "20251013_101103"
+  },
+  {
+    "filename": "0028_sv-SE_CustomerService_20251013_101112.wav",
+    "sentence": "Om du skulle ångra ditt köp har du alltid 14 dagars returrätt.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 27,
+    "timestamp": "20251013_101112"
+  },
+  {
+    "filename": "0029_sv-SE_CustomerService_20251013_101117.wav",
+    "sentence": "Alla priser i webbutiken är inklusive moms.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 28,
+    "timestamp": "20251013_101117"
+  },
+  {
+    "filename": "0030_sv-SE_CustomerService_20251013_101126.wav",
+    "sentence": "Vi har nöjd-kund-garanti, vilket innebär att du får pengarna tillbaka om du inte är helt nöjd.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 29,
+    "timestamp": "20251013_101126"
+  },
+  {
+    "filename": "0031_sv-SE_CustomerService_20251013_101133.wav",
+    "sentence": "Det minsta köpbeloppet i vår webbshop är 100 kr.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 30,
+    "timestamp": "20251013_101133"
+  },
+  {
+    "filename": "0032_sv-SE_CustomerService_20251013_101145.wav",
+    "sentence": "Din beställning borde vara framme hos dig inom 5 dagar.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 31,
+    "timestamp": "20251013_101145"
+  },
+  {
+    "filename": "0033_sv-SE_CustomerService_20251013_101154.wav",
+    "sentence": "Vi har varan i lager och den förväntade leveranstiden är 2 till 3 arbetsdagar.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 32,
+    "timestamp": "20251013_101154"
+  },
+  {
+    "filename": "0034_sv-SE_CustomerService_20251013_101209.wav",
+    "sentence": "Du kan hitta mer information om alla produkter på vår webbplats.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 33,
+    "timestamp": "20251013_101209"
+  },
+  {
+    "filename": "0035_sv-SE_CustomerService_20251013_101224.wav",
+    "sentence": "Jag kan se att ditt paket fortfarande är under transport hos vår fraktpartner.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 34,
+    "timestamp": "20251013_101224"
+  },
+  {
+    "filename": "0036_sv-SE_CustomerService_20251013_101231.wav",
+    "sentence": "Eftersom du är bonuskund hos oss skickar vi din order fraktfritt.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 35,
+    "timestamp": "20251013_101231"
+  },
+  {
+    "filename": "0037_sv-SE_CustomerService_20251013_101237.wav",
+    "sentence": "Vill du att varan ska skickas som en gåva?",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 36,
+    "timestamp": "20251013_101237"
+  },
+  {
+    "filename": "0038_sv-SE_CustomerService_20251013_101255.wav",
+    "sentence": "Jag beklagar, men just den produkten har utgått ur vårt sortiment.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 37,
+    "timestamp": "20251013_101255"
+  },
+  {
+    "filename": "0039_sv-SE_CustomerService_20251013_101302.wav",
+    "sentence": "Du har pengarna-tillbaka-garanti på alla produkter i tre månader.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 38,
+    "timestamp": "20251013_101302"
+  },
+  {
+    "filename": "0040_sv-SE_CustomerService_20251013_101311.wav",
+    "sentence": "Vi lämnar en extra garanti på alla teknikprodukter i ett år.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 39,
+    "timestamp": "20251013_101311"
+  },
+  {
+    "filename": "0041_sv-SE_CustomerService_20251013_101331.wav",
+    "sentence": "Datorn du söker har dessvärre utgått ur sortimentet, men jag kan rekommendera en nyare modell.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 40,
+    "timestamp": "20251013_101331"
+  },
+  {
+    "filename": "0042_sv-SE_CustomerService_20251013_101347.wav",
+    "sentence": "Om du behöver hjälp med att koppla in routern erbjuder vi installationshjälp i hemmet.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 41,
+    "timestamp": "20251013_101347"
+  },
+  {
+    "filename": "0043_sv-SE_CustomerService_20251013_101354.wav",
+    "sentence": "Dröj bara ett kort ögonblick, så ska jag ta fram din köphistorik.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 42,
+    "timestamp": "20251013_101354"
+  },
+  {
+    "filename": "0044_sv-SE_CustomerService_20251013_101401.wav",
+    "sentence": "Du kan se alla dina beställningar genom att logga in på ditt konto.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 43,
+    "timestamp": "20251013_101401"
+  },
+  {
+    "filename": "0045_sv-SE_CustomerService_20251013_101406.wav",
+    "sentence": "Jag ska se om varan finns på lager hos din närmaste återförsäljare.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 44,
+    "timestamp": "20251013_101406"
+  },
+  {
+    "filename": "0046_sv-SE_CustomerService_20251013_101423.wav",
+    "sentence": "Ett ögonblick, så ska jag logga in i vårt system där jag kan se dina beställningar.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 45,
+    "timestamp": "20251013_101423"
+  },
+  {
+    "filename": "0047_sv-SE_CustomerService_20251013_101432.wav",
+    "sentence": "Ladda gärna ner vår app för att få fler personliga erbjudanden till din telefon.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 46,
+    "timestamp": "20251013_101432"
+  },
+  {
+    "filename": "0048_sv-SE_CustomerService_20251013_101440.wav",
+    "sentence": "Varan är dessvärre tillfälligt slut på vårt centrallager, men jag lägger gärna in en bevakning om du vill.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 47,
+    "timestamp": "20251013_101440"
+  },
+  {
+    "filename": "0049_sv-SE_CustomerService_20251013_101446.wav",
+    "sentence": "Vill du göra en beställning över telefon?",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 48,
+    "timestamp": "20251013_101446"
+  },
+  {
+    "filename": "0050_sv-SE_CustomerService_20251013_101502.wav",
+    "sentence": "Om jag får ditt namn och kundnummer så ska jag kontrollera statusen för din order.",
+    "prompt_list": "sv-SE_4000000001_4000000300_CustomerService",
+    "prompt_index": 49,
+    "timestamp": "20251013_101502"
+  },
+  {
+    "filename": "0015_sv-SE_General_20251013_101605.wav",
+    "sentence": "Människor har redan kommit på en rad olika intressanta sätt att återvinna gammal teknik, bland annat att förvandla plast till material för asfaltering av vägar och trottoarer.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 14,
+    "timestamp": "20251013_101605"
+  },
+  {
+    "filename": "0016_sv-SE_General_20251013_101642.wav",
+    "sentence": "Många skolor har hakat på trenden med högintensiv fysisk träning på schemat, något som visat sig förbättra inlärning och betyg.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 15,
+    "timestamp": "20251013_101642"
+  },
+  {
+    "filename": "0017_sv-SE_General_20251013_101725.wav",
+    "sentence": "Det finns många arter som räknas som invasiva i Sverige, till exempel det japanska jätteostronet.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 16,
+    "timestamp": "20251013_101725"
+  },
+  {
+    "filename": "0018_sv-SE_General_20251013_101734.wav",
+    "sentence": "Medieutvecklingen har på många sätt bidragit till att medborgarna fått fler och bättre resurser för att hantera kriser.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 17,
+    "timestamp": "20251013_101734"
+  },
+  {
+    "filename": "0019_sv-SE_General_20251013_101748.wav",
+    "sentence": "På framtidens arbetsmarknad spelar det mindre roll var du är när du arbetar, så länge som du har idéerna, drivkraften och strategierna.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 18,
+    "timestamp": "20251013_101748"
+  },
+  {
+    "filename": "0020_sv-SE_General_20251013_101801.wav",
+    "sentence": "Av en ny rapport rörande svenskarnas internetanvändning framgår att internettillgången de senaste åren har legat stabilt strax över 90 procent.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 19,
+    "timestamp": "20251013_101801"
+  },
+  {
+    "filename": "0021_sv-SE_General_20251013_101822.wav",
+    "sentence": "Människokroppen är gjord för att springa långa sträckor, men livet i det moderna samhället sätter käppar i hjulet för våra naturliga förmågor.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 20,
+    "timestamp": "20251013_101822"
+  },
+  {
+    "filename": "0022_sv-SE_General_20251013_101847.wav",
+    "sentence": "Att baka och äta traditionella bakverk på tillhörande högtidsdag, som exempelvis Fettisdagen och Kanelbullens dag, är djupt rotat i vår svenska fikakultur.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 21,
+    "timestamp": "20251013_101847"
+  },
+  {
+    "filename": "0023_sv-SE_General_20251013_101902.wav",
+    "sentence": "Strömningstjänster har blivit allt mer populära under de senaste åren och lyssnandet på litteratur har därmed blivit ett viktigare sätt att ta del av böcker.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 22,
+    "timestamp": "20251013_101902"
+  },
+  {
+    "filename": "0024_sv-SE_General_20251013_101919.wav",
+    "sentence": "Regeringen har målet att 55 procent av befolkningen ska ha en namngiven fast läkarkontakt i primärvården före utgången av 2022.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 23,
+    "timestamp": "20251013_101919"
+  },
+  {
+    "filename": "0025_sv-SE_General_20251013_101929.wav",
+    "sentence": "Elsparkcyklar, eller elscootrar som de också kallas, har blivit ett vanligt sätt att ta sig fram i städer runt om i Sverige.",
+    "prompt_list": "sv-SE_0000000001_0300000050_General",
+    "prompt_index": 24,
+    "timestamp": "20251013_101929"
+  }
+]
