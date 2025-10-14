@@ -38,15 +38,21 @@ print_info() {
 # Confirm uninstallation
 confirm_uninstall() {
     echo ""
-    print_warning "⚠️  WARNING: This will remove ALL Coaxial Recorder data!"
+    print_warning "⚠️  WARNING: This will remove Coaxial Recorder installation and some data!"
     echo ""
     echo "This will delete:"
     echo "  • Virtual environment (venv/)"
     echo "  • Local Python installations (python310/, python311/)"
-    echo "  • Voice recordings and datasets"
-    echo "  • Training checkpoints and logs"
-    echo "  • Generated models and outputs"
-    echo "  • Configuration files"
+    echo "  • Output directory"
+    echo "  • Application logs"
+    echo "  • Converted models"
+    echo "  • Training logs"
+    echo ""
+    echo "The following will be PRESERVED:"
+    echo "  • Voice recordings and datasets (voices/)"
+    echo "  • Training checkpoints (training/checkpoints/)"
+    echo "  • Checkpoints (checkpoints/)"
+    echo "  • Models (models/)"
     echo ""
     echo "The following will be KEPT:"
     echo "  • This uninstall script"
@@ -103,8 +109,8 @@ remove_local_python() {
 remove_app_data() {
     print_info "Removing application data..."
 
-    # Remove data directories
-    directories=("voices" "output" "checkpoints" "logs" "converted_models" "training/checkpoints" "training/logs")
+    # Remove data directories (preserving voices, checkpoints, and models)
+    directories=("output" "logs" "converted_models" "training/logs")
 
     for dir in "${directories[@]}"; do
         if [ -d "$dir" ]; then
@@ -212,11 +218,18 @@ main() {
     echo "What was removed:"
     echo "  • Virtual environment and all Python packages"
     echo "  • Local Python installations"
-    echo "  • Voice recordings and datasets"
-    echo "  • Training checkpoints and logs"
-    echo "  • Generated models and outputs"
+    echo "  • Output directory"
+    echo "  • Application logs"
+    echo "  • Converted models"
+    echo "  • Training logs"
     echo "  • Docker containers and images"
     echo "  • MFA installation (if applicable)"
+    echo ""
+    echo "What was preserved:"
+    echo "  • Voice recordings and datasets (voices/)"
+    echo "  • Training checkpoints (training/checkpoints/)"
+    echo "  • Checkpoints (checkpoints/)"
+    echo "  • Models (models/)"
     echo ""
     echo "What was kept:"
     echo "  • Installation scripts (*.sh, *.bat)"

@@ -70,8 +70,8 @@ converted_models/*
 !/converted_models/.gitkeep
 
 # Voice profiles - User-generated data
-# Exclude all voice profile directories and their contents
-voices/*/
+# Track voice profiles in git
+# voices/*/
 
 # Training data
 training/checkpoints/*
