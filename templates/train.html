@@ -120,44 +120,78 @@
                                     <strong><i class="fas fa-info-circle me-1"></i>Checkpoint Options:</strong>
                                     <ul class="mb-0 mt-2">
                                         <li><strong>Pre-trained Base Voice:</strong> Select from available models. Some require manual download.</li>
-                                        <li><strong>Custom Checkpoint Path:</strong> Use for manually downloaded checkpoints or local files. Leave dropdown empty when using custom path.</li>
+                                        <li><strong>Discovered Local Checkpoints:</strong> Automatically scan and use local checkpoint files.</li>
+                                        <li><strong>Custom Checkpoint Path:</strong> Use for manually downloaded checkpoints or local files.</li>
                                     </ul>
                                 </div>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <label for="baseVoice" class="form-label">Pre-trained Base Voice</label>
-                                        <select class="form-select" id="baseVoice" name="baseVoice">
-                                            <option value="">Select a base voice...</option>
-                                        </select>
-                                        <div class="parameter-help mt-1">
-                                            Select from catalog (some may require manual download)
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="checkpointPath" class="form-label">
-                                            Custom Checkpoint Path 
-                                            <span class="badge bg-warning text-dark">For Manual Downloads</span>
-                                        </label>
-                                        <div class="input-group">
-                                            <input type="text" class="form-control" id="checkpointPath" placeholder="checkpoints/sv-SE/nst/model.ckpt">
-                                            <input type="file" id="checkpointFilePicker" accept=".ckpt,.pt,.pth" style="display: none;" onchange="handleCheckpointFileSelect(this)">
-                                            <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('checkpointFilePicker').click()">
-                                                <i class="fas fa-folder-open"></i> Browse
-                                            </button>
-                                        </div>
-                                        <div class="parameter-help mt-1">
-                                            Path to your manually downloaded checkpoint file. Click Browse to select, or type path manually. Leave "Pre-trained Base Voice" empty when using this.
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mt-2">
+
+                                <div class="d-flex justify-content-between align-items-center mb-3">
                                     <button type="button" class="btn btn-sm btn-outline-primary" id="refreshCheckpoints">
                                         <i class="fas fa-sync-alt me-1"></i>Refresh Available Models
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-info" id="downloadCheckpoint" style="display: none;">
-                                        <i class="fas fa-download me-1"></i>Download Selected Model
+                                    <span id="checkpointRefreshStatus" class="badge bg-success">
+                                        <i class="fas fa-check-circle me-1"></i>Updated <span id="checkpointRefreshTime"></span>
+                                    </span>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleCheckpointView()">
+                                        <i class="fas fa-exchange-alt me-1"></i>Switch View
                                     </button>
-                                    <span id="checkpointStatus" class="ms-2"></span>
+                                </div>
+
+                                <!-- Pre-trained Base Voices Section -->
+                                <div id="predefinedCheckpointSection">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label for="baseVoice" class="form-label">Pre-trained Base Voice</label>
+                                            <select class="form-select" id="baseVoice" name="baseVoice" onchange="handleBaseVoiceSelection()">
+                                                <option value="">Select a base voice...</option>
+                                            </select>
+                                            <div class="parameter-help mt-1">
+                                                Select from catalog (some may require manual download)
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="checkpointPath" class="form-label">
+                                                Custom Checkpoint Path
+                                                <span class="badge bg-warning text-dark">For Manual Downloads</span>
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="checkpointPath" placeholder="checkpoints/sv-SE/nst/model.ckpt" onchange="updateTerminalCommand()">
+                                                <input type="file" id="checkpointFilePicker" accept=".ckpt,.pt,.pth" style="display: none;" onchange="handleCheckpointFileSelect(this)">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('checkpointFilePicker').click()">
+                                                    <i class="fas fa-folder-open"></i> Browse
+                                                </button>
+                                            </div>
+                                            <div class="parameter-help mt-1">
+                                                Path to your manually downloaded checkpoint file. Click Browse to select, or type path manually.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-outline-info" id="downloadCheckpoint" style="display: none;">
+                                            <i class="fas fa-download me-1"></i>Download Selected Model
+                                        </button>
+                                        <span id="checkpointStatus" class="ms-2"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Discovered Checkpoints Section -->
+                                <div id="discoveredCheckpointSection" class="d-none">
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <label for="discoveredCheckpoint" class="form-label">Discovered Local Checkpoints</label>
+                                            <select class="form-select" id="discoveredCheckpoint" name="discoveredCheckpoint" onchange="handleDiscoveredCheckpointSelection()">
+                                                <option value="">Select a local checkpoint...</option>
+                                            </select>
+                                            <div class="parameter-help mt-1">
+                                                Automatically discovered checkpoint files from your local directories
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="checkpointSelectionFeedback" class="alert alert-info d-none mt-3">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <span id="checkpointFeedbackMessage"></span>
                                 </div>
                             </div>
                         </div>
@@ -502,6 +536,8 @@
     <script>
         let currentTrainingJob = null;
         let progressInterval = null;
+        let currentCheckpointView = 'predefined'; // 'predefined' or 'discovered'
+        let lastCheckpointRefreshTime = null;
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -510,6 +546,7 @@
             updateTerminalCommand();
             checkGPUStatus();
             loadAvailableCheckpoints(); // Load available checkpoints
+            updateCheckpointRefreshTime();
         });
 
         function setupEventListeners() {
@@ -594,7 +631,7 @@
             const profileId = document.getElementById('voiceProfile').value;
             const promptListSelect = document.getElementById('promptList');
             const selectedOptions = Array.from(promptListSelect.selectedOptions).map(opt => opt.value).filter(v => v);
-            
+
             if (!profileId || selectedOptions.length === 0) {
                 document.getElementById('originalCount').textContent = '0 files';
                 document.getElementById('preprocessedCount').textContent = '0 files';
@@ -608,10 +645,10 @@
                     body: JSON.stringify({ prompt_list_ids: selectedOptions })
                 });
                 const data = await response.json();
-                
+
                 document.getElementById('originalCount').textContent = `${data.original_count || 0} files`;
                 document.getElementById('preprocessedCount').textContent = `${data.preprocessed_count || 0} files`;
-                
+
                 // Disable preprocessed option if no preprocessed files exist
                 const preprocessedRadio = document.getElementById('audioSourcePreprocessed');
                 if (data.preprocessed_count === 0) {
@@ -759,10 +796,10 @@
                 // Use the full path if available (security restricted in most browsers)
                 // Otherwise use relative path from file name
                 const pathInput = document.getElementById('checkpointPath');
-                
+
                 // Try to get full path (won't work in most browsers due to security)
                 const fullPath = file.path || file.webkitRelativePath || file.name;
-                
+
                 // If we got just the filename, suggest the checkpoints directory
                 if (fullPath === file.name) {
                     // Guess checkpoint location based on filename
@@ -773,7 +810,7 @@
                     } else {
                         pathInput.value = `checkpoints/${file.name}`;
                     }
-                    
+
                     // Show info about manual path
                     alert(`Selected: ${file.name}\n\nNote: For security, browsers don't provide the full file path.\n\nPlease verify the path is correct or edit manually:\n${pathInput.value}\n\nOr copy the file to the suggested location.`);
                 } else {
@@ -1073,6 +1110,178 @@
         document.querySelectorAll('input[name="audioSource"]').forEach(radio => {
             radio.addEventListener('change', updateTerminalCommand);
         });
+
+        // Update checkpoint refresh time
+        function updateCheckpointRefreshTime() {
+            const now = new Date();
+            lastCheckpointRefreshTime = now;
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const refreshTimeElement = document.getElementById('checkpointRefreshTime');
+            if (refreshTimeElement) {
+                refreshTimeElement.textContent = timeString;
+            }
+        }
+
+        // Toggle between predefined and discovered checkpoints
+        function toggleCheckpointView() {
+            const predefinedSection = document.getElementById('predefinedCheckpointSection');
+            const discoveredSection = document.getElementById('discoveredCheckpointSection');
+
+            if (currentCheckpointView === 'predefined') {
+                currentCheckpointView = 'discovered';
+                predefinedSection.classList.add('d-none');
+                discoveredSection.classList.remove('d-none');
+                loadDiscoveredCheckpoints();
+            } else {
+                currentCheckpointView = 'predefined';
+                predefinedSection.classList.remove('d-none');
+                discoveredSection.classList.add('d-none');
+            }
+        }
+
+        // Scan for discovered checkpoints
+        async function scanDiscoveredCheckpoints() {
+            try {
+                const response = await fetch('/api/test/discover-checkpoints');
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log(`Discovered ${data.checkpoints.length} checkpoint files`);
+                    return data;
+                } else {
+                    console.error('Error discovering checkpoints:', data.error);
+                    return { success: false, checkpoints: [] };
+                }
+            } catch (error) {
+                console.error('Error scanning checkpoints:', error);
+                return { success: false, checkpoints: [] };
+            }
+        }
+
+        // Load discovered checkpoints into the dropdown
+        async function loadDiscoveredCheckpoints() {
+            const discoveredSelect = document.getElementById('discoveredCheckpoint');
+
+            discoveredSelect.innerHTML = '<option value="">Select a local checkpoint...</option>';
+            discoveredSelect.disabled = true;
+
+            try {
+                const data = await scanDiscoveredCheckpoints();
+
+                if (data.success && data.checkpoints) {
+                    data.checkpoints.forEach(checkpoint => {
+                        const option = document.createElement('option');
+                        option.value = checkpoint.path;
+                        option.textContent = `${checkpoint.name} (${checkpoint.size})`;
+                        option.setAttribute('data-path', checkpoint.path);
+                        discoveredSelect.appendChild(option);
+                    });
+
+                    if (data.checkpoints.length > 0) {
+                        discoveredSelect.disabled = false;
+                        showCheckpointFeedback(
+                            `Discovered ${data.checkpoints.length} local checkpoint${data.checkpoints.length > 1 ? 's' : ''}`,
+                            'success'
+                        );
+                    } else {
+                        showCheckpointFeedback('No local checkpoints found', 'warning');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading discovered checkpoints:', error);
+                showCheckpointFeedback('Error loading discovered checkpoints', 'danger');
+            }
+        }
+
+        // Handle base voice selection from predefined list
+        function handleBaseVoiceSelection() {
+            const baseVoiceSelect = document.getElementById('baseVoice');
+            const selectedOption = baseVoiceSelect.options[baseVoiceSelect.selectedIndex];
+
+            if (selectedOption && selectedOption.value) {
+                const voiceId = selectedOption.value;
+                const isDownloaded = selectedOption.textContent.includes('✓');
+
+                showCheckpointFeedback(
+                    `Selected: ${selectedOption.textContent.replace(' ✓', '')} ${isDownloaded ? '(Already downloaded)' : '(Needs download)'}`,
+                    isDownloaded ? 'success' : 'warning'
+                );
+
+                updateCheckpointButtons();
+                updateTerminalCommand();
+            }
+        }
+
+        // Handle discovered checkpoint selection
+        function handleDiscoveredCheckpointSelection() {
+            const discoveredSelect = document.getElementById('discoveredCheckpoint');
+            const selectedOption = discoveredSelect.options[discoveredSelect.selectedIndex];
+
+            if (selectedOption && selectedOption.value) {
+                const path = selectedOption.getAttribute('data-path');
+                showCheckpointFeedback(
+                    `Selected: ${selectedOption.textContent}<br><small>Path: ${path}</small>`,
+                    'info'
+                );
+                updateTerminalCommand();
+            }
+        }
+
+        // Show checkpoint feedback message
+        function showCheckpointFeedback(message, type = 'info') {
+            const feedbackDiv = document.getElementById('checkpointSelectionFeedback');
+            const feedbackMessage = document.getElementById('checkpointFeedbackMessage');
+
+            if (!feedbackDiv || !feedbackMessage) return;
+
+            feedbackMessage.innerHTML = message;
+            feedbackDiv.className = `alert alert-${type} d-block mt-3`;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                feedbackDiv.classList.add('d-none');
+            }, 5000);
+        }
+
+        // Enhanced loadAvailableCheckpoints with comprehensive scanning
+        function loadAvailableCheckpoints() {
+            const statusSpan = document.getElementById('checkpointStatus');
+            if (statusSpan) {
+                statusSpan.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+            }
+
+            // Scan both pre-trained voices and discovered checkpoints
+            Promise.all([
+                fetch('/api/checkpoints').then(r => r.json()),
+                fetch('/api/test/discover-checkpoints').then(r => r.json())
+            ])
+            .then(([predefinedData, discoveredData]) => {
+                if (predefinedData.success) {
+                    populateCheckpointSelect(predefinedData.checkpoints);
+                    if (statusSpan) {
+                        statusSpan.innerHTML = '<span class="text-success"><i class="fas fa-check me-1"></i>Loaded</span>';
+                    }
+                } else {
+                    if (statusSpan) {
+                        statusSpan.innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Error</span>';
+                    }
+                    console.error('Error loading checkpoints:', predefinedData.error);
+                }
+
+                // Log discovered checkpoints
+                if (discoveredData.success) {
+                    console.log(`Discovered ${discoveredData.checkpoints.length} local checkpoint files`);
+                }
+
+                updateCheckpointRefreshTime();
+            })
+            .catch(error => {
+                if (statusSpan) {
+                    statusSpan.innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Error</span>';
+                }
+                console.error('Error loading checkpoints:', error);
+            });
+        }
     </script>
 </body>
 </html>
