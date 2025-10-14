@@ -326,6 +326,7 @@
     <script>
         let currentProcessingJob = null;
         let progressInterval = null;
+        let hasShownCompletionAlert = false;
 
         // Load voice profiles on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -574,16 +575,21 @@
                             clearInterval(progressInterval);
                             resetProcessingButton();
 
-                            if (data.status === 'completed') {
-                                const summary = `Processing completed successfully!\n\n✅ Successful: ${data.successful || data.total}\n📁 Output: ${data.output_location || 'recordings/preprocessed/'}`;
-                                alert(summary);
-                                loadProcessingHistory();
-                            } else if (data.status === 'partial') {
-                                const summary = `Processing completed with some failures:\n\n✅ Successful: ${data.successful}\n❌ Failed: ${data.failed}\n📁 Output: ${data.output_location || 'recordings/preprocessed/'}`;
-                                alert(summary);
-                                loadProcessingHistory();
-                            } else {
-                                alert('Processing failed: ' + (data.error || 'Unknown error'));
+                            // Only show alert once to prevent respawning
+                            if (!hasShownCompletionAlert) {
+                                hasShownCompletionAlert = true;
+
+                                if (data.status === 'completed') {
+                                    const summary = `Processing completed successfully!\n\n✅ Successful: ${data.successful || data.total}\n📁 Output: ${data.output_location || 'recordings/preprocessed/'}`;
+                                    alert(summary);
+                                    loadProcessingHistory();
+                                } else if (data.status === 'partial') {
+                                    const summary = `Processing completed with some failures:\n\n✅ Successful: ${data.successful}\n❌ Failed: ${data.failed}\n📁 Output: ${data.output_location || 'recordings/preprocessed/'}`;
+                                    alert(summary);
+                                    loadProcessingHistory();
+                                } else {
+                                    alert('Processing failed: ' + (data.error || 'Unknown error'));
+                                }
                             }
                         }
                     })
