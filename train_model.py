@@ -139,7 +139,7 @@ def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, langu
     else:
         recordings_dir = base_recordings_dir
         logging.info(f"Using original audio from: {recordings_dir}")
-    
+
     if not recordings_dir.exists():
         logging.error(f"Recordings directory not found: {recordings_dir}")
         return dataset_info
@@ -150,32 +150,64 @@ def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, langu
 
     # Load metadata and prepare transcripts
     metadata_file = Path("voices") / profile_id / "metadata.jsonl"
+    matched_audio_files = []
     if metadata_file.exists():
+        # Extract the prompt list ID without the profile prefix
+        # prompt_list_id format: "profile_id_prompt_list" -> we need just "prompt_list"
+        actual_prompt_list_id = prompt_list_id
+        if "_" in prompt_list_id:
+            # Try to remove the profile prefix
+            parts = prompt_list_id.split("_", 1)
+            if len(parts) == 2:
+                actual_prompt_list_id = parts[1]
+
         with open(metadata_file, 'r', encoding='utf-8') as f:
             for line in f:
                 if line.strip():
                     try:
                         metadata = json.loads(line.strip())
-                        if metadata.get("prompt_list") == prompt_list_id:
+                        # Compare with both the full prompt_list_id and the extracted one
+                        if metadata.get("prompt_list") == prompt_list_id or metadata.get("prompt_list") == actual_prompt_list_id:
                             dataset_info["transcripts"].append(metadata)
 
-                            # Convert text to phonemes
-                            text = metadata.get("text", "")
-                            if text:
-                                phonemes = phoneme_manager.text_to_phonemes(text, language_code)
-                                if phonemes:
-                                    dataset_info["phonemes"].append({
-                                        "text": text,
-                                        "phonemes": phonemes,
-                                        "file_id": metadata.get("file_id")
-                                    })
-                                else:
-                                    logging.warning(f"Failed to convert text to phonemes: {text}")
+                            # Find matching audio file
+                            # Support both "file_id" and "filename" field names
+                            file_id = metadata.get("file_id") or metadata.get("filename", "")
+                            matching_audio = None
+                            for audio_file in audio_files:
+                                if audio_file.name == file_id or audio_file.stem in file_id or file_id in audio_file.name:
+                                    matching_audio = audio_file
+                                    break
+
+                            if matching_audio:
+                                matched_audio_files.append(matching_audio)
+                            else:
+                                logging.warning(f"No matching audio file found for {file_id}")
+
+                            # Only convert text to phonemes if MFA is available
+                            if is_mfa_available() and lang_config.get("mfa_language"):
+                                # Support both "text" and "sentence" field names
+                                text = metadata.get("text") or metadata.get("sentence", "")
+
+                                if text:
+                                    phonemes = phoneme_manager.text_to_phonemes(text, language_code)
+                                    if phonemes:
+                                        dataset_info["phonemes"].append({
+                                            "text": text,
+                                            "phonemes": phonemes,
+                                            "file_id": file_id
+                                        })
+                                    else:
+                                        logging.warning(f"Failed to convert text to phonemes: {text}")
                     except json.JSONDecodeError:
                         continue
 
     logging.info(f"Found {len(dataset_info['transcripts'])} transcript entries")
     logging.info(f"Generated {len(dataset_info['phonemes'])} phoneme sequences")
+    logging.info(f"Matched {len(matched_audio_files)} audio files with transcripts")
+
+    # Add audio files to dataset info
+    dataset_info['audio_files'] = [str(f) for f in matched_audio_files]
 
     # Prepare MFA alignment if available
     if is_mfa_available() and lang_config.get("mfa_language"):
@@ -190,9 +222,13 @@ def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, langu
         text_dir.mkdir(exist_ok=True)
 
         for transcript in dataset_info["transcripts"]:
-            text_file = text_dir / f"{transcript['file_id']}.txt"
+            # Support both "file_id" and "filename" field names
+            file_id = transcript.get("file_id") or transcript.get("filename", "")
+            text_file = text_dir / f"{file_id}.txt"
             with open(text_file, 'w', encoding='utf-8') as f:
-                f.write(transcript.get("text", ""))
+                # Support both "text" and "sentence" field names
+                text = transcript.get("text") or transcript.get("sentence", "")
+                f.write(text)
 
         # Run MFA alignment
         alignment_dir = temp_dir / "alignment"
