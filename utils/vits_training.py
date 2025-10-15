@@ -280,7 +280,7 @@ def train_tts_model(
         # Load from checkpoint if provided
         if checkpoint_path and Path(checkpoint_path).exists():
             logger.info(f"Loading checkpoint: {checkpoint_path}")
-            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
             model.load_state_dict(checkpoint['state_dict'], strict=False)
 
         # Callbacks

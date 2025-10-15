@@ -166,8 +166,9 @@ def prepare_dataset(profile_id: str, prompt_list_id: str, output_dir: str, langu
                 if line.strip():
                     try:
                         metadata = json.loads(line.strip())
-                        # Compare with both the full prompt_list_id and the extracted one
-                        if metadata.get("prompt_list") == prompt_list_id or metadata.get("prompt_list") == actual_prompt_list_id:
+                        # If prompt_list_id is "all", use all clips regardless of prompt_list
+                        # Otherwise, compare with both the full prompt_list_id and the extracted one
+                        if prompt_list_id == "all" or metadata.get("prompt_list") == prompt_list_id or metadata.get("prompt_list") == actual_prompt_list_id:
                             dataset_info["transcripts"].append(metadata)
 
                             # Find matching audio file
