@@ -346,7 +346,7 @@ def synthesize_speech_with_checkpoint(text: str, checkpoint_path: Path, output_p
         # Load checkpoint (CPU)
         checkpoint = torch.load(checkpoint_path, map_location=device)
 
-        # Model config
+        # Detect phoneme2mel vs legacy mel-to-mel
         model_config = checkpoint.get('config', {})
         if not model_config:
             model_config = {
@@ -360,8 +360,46 @@ def synthesize_speech_with_checkpoint(text: str, checkpoint_path: Path, output_p
         n_fft = 1024
         n_stft = n_fft // 2 + 1
 
-        # Create model on CPU
-        model = SimpleTTSModel(model_config).to(device)
+        # If checkpoint originates from phoneme2mel (embedding present), synthesize via phoneme→mel
+        is_phoneme2mel = ('vocab_size' in model_config) or any(k.startswith('embedding.') for k in checkpoint.get('state_dict', {}).keys())
+
+        if is_phoneme2mel:
+            # Lazy import to avoid circulars
+            from phoneme2mel_training.model import PhonemeToMelModel
+            # Prepare phonemes
+            phonemes_str = text_to_phonemes(text, 'sv-SE') or text_to_phonemes(text, 'en-US') or ''
+            if not phonemes_str:
+                return False
+            # Tokenize using phoneme map
+            with open('phoneme2mel_training/phoneme_map.json', 'r', encoding='utf-8') as f:
+                pmap = json.load(f)
+            unk_id = pmap.get('UNK', 92)
+            token_ids = [pmap.get(p, unk_id) for p in phonemes_str.split()]
+            tokens = torch.tensor(token_ids, dtype=torch.long, device=device).unsqueeze(0)
+
+            # Build model and load weights
+            model_config.setdefault('n_mels', 80)
+            model_config.setdefault('vocab_size', len(pmap))
+            model = PhonemeToMelModel(model_config).to(device)
+            state_dict = checkpoint['state_dict'] if 'state_dict' in checkpoint else checkpoint
+            model.load_state_dict(state_dict, strict=False)
+            model.eval()
+
+            # Forward to mel
+            with torch.no_grad():
+                mel_out_bt_f = model(tokens)
+        else:
+            # Legacy: build SimpleTTSModel and feed random mel as before
+            model = SimpleTTSModel(model_config).to(device)
+            state_dict = checkpoint['state_dict'] if 'state_dict' in checkpoint else checkpoint
+            model.load_state_dict(state_dict)
+            model.eval()
+
+            phonemes_str = text_to_phonemes(text, 'sv-SE') or ''
+            mel_length = max(10, len(phonemes_str.split()) * 50)
+            mel_spec = torch.randn(1, mel_length, n_mels, device=device)
+            with torch.no_grad():
+                mel_out_bt_f = model(mel_spec)
 
         # Load state dict
         if 'state_dict' in checkpoint:
@@ -379,10 +417,6 @@ def synthesize_speech_with_checkpoint(text: str, checkpoint_path: Path, output_p
         # Create a basic mel input driven by phoneme length
         mel_length = max(10, len(phonemes_str.split()) * 50)
         mel_spec = torch.randn(1, mel_length, n_mels, device=device)
-
-        # Forward pass: model outputs mel (batch, time, features)
-        with torch.no_grad():
-            mel_out_bt_f = model(mel_spec)
 
         # Prepare for inverse mel: (batch, features, time)
         mel_out_bf_t = mel_out_bt_f.transpose(1, 2).contiguous()

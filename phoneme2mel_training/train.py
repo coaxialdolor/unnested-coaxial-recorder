@@ -39,6 +39,30 @@ def main():
 
     config = load_config(args.config)
 
+    # Validate required keys and phoneme map
+    if "phoneme_map_path" not in config:
+        raise ValueError("Missing 'phoneme_map_path' in config")
+    phoneme_map_path = Path(config["phoneme_map_path"]) 
+    if not phoneme_map_path.exists():
+        raise FileNotFoundError(f"phoneme_map_path not found: {phoneme_map_path}")
+    with open(phoneme_map_path, "r", encoding="utf-8") as f:
+        phoneme_map = json.load(f)
+    if "UNK" not in phoneme_map:
+        raise ValueError("phoneme_map.json must include 'UNK' entry")
+    unk_id = int(config.get("unk_id", phoneme_map.get("UNK")))
+    if unk_id != phoneme_map.get("UNK"):
+        # ensure consistency
+        unk_id = phoneme_map.get("UNK")
+        config["unk_id"] = unk_id
+    vocab_size = int(config.get("vocab_size", len(phoneme_map)))
+    if vocab_size != len(phoneme_map):
+        vocab_size = len(phoneme_map)
+        config["vocab_size"] = vocab_size
+    # Additional required keys
+    for k in ["n_mels", "sample_rate"]:
+        if k not in config:
+            raise ValueError(f"Missing '{k}' in config")
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("phoneme2mel")
 
@@ -64,7 +88,7 @@ def main():
         phoneme_sequences=phoneme_sequences,
         transcripts=transcripts,
         sample_rate=int(config.get("sample_rate", 22050)),
-        phoneme_map_path=phoneme_map_path,
+        phoneme_map_path=str(phoneme_map_path),
     )
 
     train_loader = DataLoader(
@@ -76,6 +100,8 @@ def main():
     )
 
     # Model
+    # Tag model type for downstream detection
+    config["model_type"] = "phoneme2mel"
     model = PhonemeToMelModel(config)
 
     # Callbacks & logger

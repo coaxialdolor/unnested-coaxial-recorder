@@ -18,6 +18,7 @@ import uvicorn
 from pydantic import BaseModel
 from pathlib import Path
 import subprocess
+import uuid
 
 # Suppress NumPy 2.x compatibility warnings from PyTorch
 warnings.filterwarnings('ignore', message='.*compiled using NumPy 1.x.*')
@@ -2396,6 +2397,7 @@ async def test_page(request: Request):
 
 # In-memory storage for training jobs (in production, use Redis or database)
 training_jobs = {}
+phoneme2mel_jobs = {}
 
 @app.get("/api/train/gpu-status")
 async def get_gpu_status():
@@ -2613,6 +2615,101 @@ async def stop_training(job_id: str):
     training_jobs[job_id]["console_output"].append("Training stopped by user")
 
     return {"success": True}
+
+# --- New Phoneme2Mel training endpoint ---
+@app.post("/api/train/phoneme2mel")
+async def start_phoneme2mel_training(
+    profile_id: str = Form(...),
+    prompt_list_id: str = Form(...),
+    output_dir: str = Form(""),
+):
+    try:
+        from train_model import prepare_dataset
+
+        # Prepare dataset using existing pipeline
+        if not output_dir:
+            output_dir = f"models/phoneme2mel_outputs/{profile_id}"
+
+        dataset_info = prepare_dataset(
+            profile_id=profile_id,
+            prompt_list_id=prompt_list_id,
+            output_dir=output_dir,
+            language_code=profile_id.split('_')[0] if '_' in profile_id else "en-US",
+            audio_source="original",
+        )
+
+        audio_files = dataset_info.get("audio_files", [])
+        transcripts = [t.get("text", "") for t in dataset_info.get("transcripts", [])]
+        phoneme_items = dataset_info.get("phonemes", [])
+        phoneme_sequences = [p.get("phonemes", "") for p in phoneme_items]
+
+        # Extract language tags from filenames: e.g., 0001_sv-SE_...
+        import re as _re
+        lang_tags = []
+        for p in audio_files:
+            m = _re.search(r"_(en-US|en-GB|sv-SE|it-IT)_", str(p))
+            if m:
+                lang_tags.append(m.group(1))
+
+        # Load phoneme map to derive vocab_size and unk_id
+        pmap_path = Path("phoneme2mel_training/phoneme_map.json")
+        if not pmap_path.exists():
+            raise Exception("phoneme2mel_training/phoneme_map.json not found")
+        with open(pmap_path, "r", encoding="utf-8") as f:
+            pmap = json.load(f)
+        if "UNK" not in pmap:
+            raise Exception("phoneme_map.json must include 'UNK' entry")
+        derived_vocab_size = len(pmap)
+        derived_unk_id = int(pmap["UNK"])
+
+        # Assemble config.json for phoneme2mel
+        config = {
+            "vocab_size": derived_vocab_size,
+            "unk_id": derived_unk_id,
+            "n_mels": 80,
+            "sample_rate": 22050,
+            "embed_dim": 256,
+            "nhead": 4,
+            "num_layers": 4,
+            "dropout": 0.1,
+            "learning_rate": 1e-4,
+            "batch_size": 12,
+            "epochs": 100,
+            "save_interval": 10,
+            "early_stopping": 20,
+            "mixed_precision": True,
+            "n_fft": 1024,
+            "hop_length": 256,
+            "phoneme_map_path": str(pmap_path),
+            "audio_files": audio_files,
+            "phoneme_sequences": phoneme_sequences,
+            "transcripts": transcripts,
+            "language_tags": lang_tags,
+        }
+
+        # Write config
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        cfg_path = out_dir / "config.json"
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+
+        # Launch training as subprocess
+        cmd = [
+            sys.executable,
+            "phoneme2mel_training/train.py",
+            "--config",
+            str(cfg_path),
+            "--output_dir",
+            str(out_dir),
+        ]
+
+        # Non-blocking background process
+        subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        return {"success": True, "output_dir": str(out_dir), "config": str(cfg_path)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Phoneme and Language Support API Endpoints
 
