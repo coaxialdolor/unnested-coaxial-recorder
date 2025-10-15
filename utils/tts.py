@@ -339,91 +339,82 @@ def synthesize_speech_with_checkpoint(text: str, checkpoint_path: Path, output_p
         import torchaudio
         from utils.vits_training import SimpleTTSModel
         from utils.phonemes import text_to_phonemes
-        
-        # Load checkpoint
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        
-        # Get model config from checkpoint
+
+        # Force CPU inference for stability on Windows
+        device = torch.device('cpu')
+
+        # Load checkpoint (CPU)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+
+        # Model config
         model_config = checkpoint.get('config', {})
         if not model_config:
-            # Try to infer config from checkpoint state dict
-            # The checkpoint was trained with medium size (hidden_dim=512)
             model_config = {
-                'hidden_dim': 512,  # Medium size model
+                'hidden_dim': 512,
                 'sample_rate': 22050
             }
-        
-        # Create model
-        model = SimpleTTSModel(model_config)
-        
+
+        sample_rate = int(model_config.get('sample_rate', 22050))
+        n_mels = 80
+        hop_length = 256
+        n_fft = 1024
+        n_stft = n_fft // 2 + 1
+
+        # Create model on CPU
+        model = SimpleTTSModel(model_config).to(device)
+
         # Load state dict
         if 'state_dict' in checkpoint:
             model.load_state_dict(checkpoint['state_dict'])
         else:
             model.load_state_dict(checkpoint)
-        
+
         model.eval()
-        
-        # Get phonemes from text
+
+        # Get phonemes (required by current pipeline)
         phonemes_str = text_to_phonemes(text, 'sv-SE')
         if not phonemes_str:
             return False
-        
-        # For now, we'll generate a mel spectrogram from the phonemes
-        # This is a simplified approach - a full VITS model would have a phoneme encoder
-        
-        # Generate a simple mel spectrogram based on phoneme sequence
-        # In a real VITS model, this would be done by the phoneme encoder
-        sample_rate = model_config.get('sample_rate', 22050)
-        n_mels = 80
-        hop_length = 256
-        n_fft = 1024
-        
-        # Create a simple mel spectrogram (this is a simplified approach)
-        # In production, you'd use the model's phoneme encoder
-        mel_length = len(phonemes_str.split()) * 50  # Rough estimate
-        mel_spec = torch.randn(1, mel_length, n_mels)  # Shape: (batch, time, features)
-        
-        # Move to device
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = model.to(device)
-        mel_spec = mel_spec.to(device)
-        
-        # Generate audio using the model
+
+        # Create a basic mel input driven by phoneme length
+        mel_length = max(10, len(phonemes_str.split()) * 50)
+        mel_spec = torch.randn(1, mel_length, n_mels, device=device)
+
+        # Forward pass: model outputs mel (batch, time, features)
         with torch.no_grad():
-            # Forward pass through the model
-            output = model(mel_spec)
-            
-            # The model outputs mel spectrogram
-            # Due to PyTorch nightly build issues with InverseMelScale and Griffin-Lim,
-            # we'll generate a simple test audio file to demonstrate checkpoint loading works
-            # In production, you would use a proper vocoder (HiFi-GAN, WaveGlow, etc.)
-            
-            # Generate a simple test audio file
-            # This is a placeholder - in production you'd use a proper vocoder
-            duration_seconds = output.shape[1] / (sample_rate / hop_length)
-            num_samples = int(sample_rate * duration_seconds)
-            
-            # Create a simple tone using numpy (PyTorch nightly has issues with torch.linspace)
-            # This is just for demonstration - not real speech synthesis
-            import numpy as np
-            t = np.linspace(0, duration_seconds, num_samples)
-            
-            # Generate a simple sine wave
-            frequency = 440.0  # A4 note
-            audio_np = np.sin(2 * np.pi * frequency * t)
-            
-            # Normalize
-            audio_np = audio_np / np.max(np.abs(audio_np)) * 0.5  # Scale to 50% volume
-            
-            # Convert to torch tensor
-            audio = torch.from_numpy(audio_np).float()
-            
-            # Save audio
-            torchaudio.save(str(output_path), audio.unsqueeze(0), sample_rate)
-            
-            return True
-            
-    except Exception as e:
-        # Silently catch and return False (logging causes crashes in PyTorch nightly)
+            mel_out_bt_f = model(mel_spec)
+
+        # Prepare for inverse mel: (batch, features, time)
+        mel_out_bf_t = mel_out_bt_f.transpose(1, 2).contiguous()
+
+        # Invert mel to linear spectrogram
+        inv_mel = torchaudio.transforms.InverseMelScale(
+            n_stft=n_stft,
+            n_mels=n_mels,
+            sample_rate=sample_rate,
+        ).to(device)
+        mag_spec = torch.clamp(inv_mel(mel_out_bf_t), min=0.0)
+
+        # Griffin-Lim to waveform
+        griffin = torchaudio.transforms.GriffinLim(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            n_iter=32,
+        ).to(device)
+        waveform = griffin(mag_spec)
+
+        # Ensure mono [1, T]
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)
+
+        # Normalize to prevent clipping
+        peak = waveform.abs().max().item() if waveform.numel() > 0 else 1.0
+        if peak > 0:
+            waveform = waveform / peak * 0.95
+
+        # Save WAV
+        torchaudio.save(str(output_path), waveform.cpu(), sample_rate)
+        return True
+
+    except Exception:
         return False

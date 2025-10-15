@@ -1,0 +1,23 @@
+{
+  "vocab_size": 93,
+  "unk_id": 92,
+  "n_mels": 80,
+  "sample_rate": 22050,
+  "embed_dim": 256,
+  "nhead": 4,
+  "num_layers": 4,
+  "dropout": 0.1,
+  "learning_rate": 0.0001,
+  "batch_size": 12,
+  "epochs": 100,
+  "save_interval": 10,
+  "early_stopping": 20,
+  "mixed_precision": true,
+  "n_fft": 1024,
+  "hop_length": 256,
+  "phoneme_map_path": "phoneme2mel_training/phoneme_map.json",
+  "audio_files": [],
+  "phoneme_sequences": [],
+  "transcripts": [],
+  "language_tags": []
+}
