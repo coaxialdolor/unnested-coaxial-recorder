@@ -27,6 +27,13 @@ class PhonemeToMelModel(L.LightningModule if LIGHTNING_AVAILABLE else nn.Module)
     def __init__(self, config: Dict):
         super().__init__()
         self.config = config
+        # Ensure hyperparameters (including model_type) are stored in checkpoints
+        if LIGHTNING_AVAILABLE:
+            try:
+                # save_hyperparameters stores a copy under 'hyper_parameters' in .ckpt
+                self.save_hyperparameters(config)
+            except Exception:
+                pass
 
         # Optimization / training params
         self.learning_rate: float = float(config.get("learning_rate", 1e-4))

@@ -89,6 +89,8 @@ COPY --from=builder $CONDA_DIR $CONDA_DIR
 
 # Copy application code
 COPY . .
+# Ensure phoneme2mel_training package is present in image
+RUN ls -la /app/phoneme2mel_training || true
 
 # Install application in editable mode to compile native extensions for current GPU
 # This is critical for RTX 5060 Ti (sm_120) support

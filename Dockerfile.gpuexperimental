@@ -95,6 +95,8 @@ WORKDIR /app
 
 # Copy application code
 COPY . .
+# Ensure phoneme2mel_training package is present in image
+RUN ls -la /app/phoneme2mel_training || true
 
 # Create necessary directories
 RUN mkdir -p voices output logs checkpoints

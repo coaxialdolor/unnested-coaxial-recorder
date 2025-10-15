@@ -2652,7 +2652,8 @@ async def start_phoneme2mel_training(
                 lang_tags.append(m.group(1))
 
         # Load phoneme map to derive vocab_size and unk_id
-        pmap_path = Path("phoneme2mel_training/phoneme_map.json")
+        # Resolve phoneme map relative to this file to avoid CWD issues
+        pmap_path = (Path(__file__).resolve().parent / "phoneme2mel_training" / "phoneme_map.json").resolve()
         if not pmap_path.exists():
             raise Exception("phoneme2mel_training/phoneme_map.json not found")
         with open(pmap_path, "r", encoding="utf-8") as f:

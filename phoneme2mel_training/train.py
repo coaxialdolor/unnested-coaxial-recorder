@@ -21,9 +21,17 @@ except ImportError:
 
 from torch.utils.data import DataLoader
 
-from .model import PhonemeToMelModel
-from .dataset import MultilingualVoiceDataset
-from .collate import collate_fn
+# Support running as script without package context
+try:
+    from .model import PhonemeToMelModel  # type: ignore
+    from .dataset import MultilingualVoiceDataset  # type: ignore
+    from .collate import collate_fn  # type: ignore
+except ImportError:
+    import sys as _sys, os as _os
+    _sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
+    from model import PhonemeToMelModel  # type: ignore
+    from dataset import MultilingualVoiceDataset  # type: ignore
+    from collate import collate_fn  # type: ignore
 
 
 def load_config(config_path: str) -> Dict:
