@@ -19,6 +19,8 @@ from pydantic import BaseModel
 from pathlib import Path
 import subprocess
 import uuid
+import tempfile
+import torch
 
 # Suppress NumPy 2.x compatibility warnings from PyTorch
 warnings.filterwarnings('ignore', message='.*compiled using NumPy 1.x.*')
@@ -2709,6 +2711,153 @@ async def start_phoneme2mel_training(
         subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         return {"success": True, "output_dir": str(out_dir), "config": str(cfg_path)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- HF to Lightning checkpoint conversion ---
+@app.post("/api/convert/hf_to_ckpt")
+async def convert_hf_to_ckpt(
+    profile_id: str = Form(...),
+    hf_config: UploadFile = File(...),
+    hf_weights: UploadFile = File(...),
+):
+    """Convert Hugging Face-style pytorch_model.bin + config.json to Lightning .ckpt for PhonemeToMelModel.
+
+    Expects:
+      - profile_id: output profile namespace
+      - hf_config: JSON describing model dims (d_model/embed_dim, nhead, num_layers, dropout, n_mels?, sample_rate?)
+      - hf_weights: PyTorch weights (state dict or container)
+    """
+    try:
+        # Resolve output directory
+        out_dir = Path("phoneme2mel_training") / "checkpoints" / profile_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_ckpt_path = out_dir / "converted.ckpt"
+
+        # Save uploaded files to temp
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            cfg_path = td_path / "config.json"
+            wts_path = td_path / "pytorch_model.bin"
+
+            cfg_bytes = await hf_config.read()
+            with open(cfg_path, "wb") as f:
+                f.write(cfg_bytes)
+            wts_bytes = await hf_weights.read()
+            with open(wts_path, "wb") as f:
+                f.write(wts_bytes)
+
+            # Load HF config
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg_json = json.load(f)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid config.json: {e}")
+
+            # Derive model config mapping
+            def pick(*keys, default=None):
+                for k in keys:
+                    if k in cfg_json:
+                        return cfg_json[k]
+                return default
+
+            embed_dim = int(pick("d_model", "hidden_size", "embed_dim", default=256))
+            nhead = int(pick("num_heads", "nhead", default=4))
+            num_layers = int(pick("num_hidden_layers", "num_layers", default=4))
+            dropout = float(pick("dropout", "attn_pdrop", default=0.1))
+            n_mels = int(pick("n_mels", default=80))
+            sample_rate = int(pick("sample_rate", default=22050))
+
+            # Load phoneme map and derive vocab/unk
+            pmap_path = (Path(__file__).resolve().parent / "phoneme2mel_training" / "phoneme_map.json").resolve()
+            if not pmap_path.exists():
+                raise HTTPException(status_code=500, detail="phoneme_map.json not found in image")
+            with open(pmap_path, "r", encoding="utf-8") as f:
+                pmap = json.load(f)
+            if "UNK" not in pmap:
+                raise HTTPException(status_code=500, detail="phoneme_map.json missing UNK entry")
+            vocab_size = len(pmap)
+            unk_id = int(pmap["UNK"])
+
+            # Build our model config
+            model_config = {
+                "vocab_size": vocab_size,
+                "unk_id": unk_id,
+                "n_mels": n_mels,
+                "sample_rate": sample_rate,
+                "embed_dim": embed_dim,
+                "nhead": nhead,
+                "num_layers": num_layers,
+                "dropout": dropout,
+                "learning_rate": 1e-4,
+                "model_type": "phoneme2mel",
+            }
+
+            # Instantiate model
+            from phoneme2mel_training.model import PhonemeToMelModel  # local import inside container
+            model = PhonemeToMelModel(model_config)
+
+            # Load HF weights
+            try:
+                raw_obj = torch.load(str(wts_path), map_location="cpu")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to load HF weights: {e}")
+
+            # Extract state_dict
+            if isinstance(raw_obj, dict) and all(isinstance(k, str) for k in raw_obj.keys()) and any(
+                k.endswith(".weight") or k.endswith(".bias") for k in raw_obj.keys()
+            ):
+                hf_state = raw_obj
+            elif isinstance(raw_obj, dict):
+                # Try common containers
+                for key in ["state_dict", "model", "module", "weights"]:
+                    if key in raw_obj and isinstance(raw_obj[key], dict):
+                        hf_state = raw_obj[key]
+                        break
+                else:
+                    raise HTTPException(status_code=400, detail="Could not find state_dict in HF weights file")
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported HF weights format")
+
+            # Map common HF parameter names to our model
+            mapped = {}
+            for k, v in hf_state.items():
+                mk = k
+                # Embedding name variants
+                if mk.startswith("embeddings.") or mk.startswith("encoder.embed_tokens."):
+                    mk = mk.replace("embeddings.", "embedding.")
+                    mk = mk.replace("encoder.embed_tokens.", "embedding.")
+                # Transformer encoder naming often aligns with nn.TransformerEncoder
+                mk = mk.replace("transformer.", "")
+                mk = mk.replace("encoder.encoder.", "encoder.")
+                # Output projection common heads
+                if mk.startswith("lm_head.") or mk.startswith("proj_out.") or mk.startswith("output."):
+                    mk = mk.replace("lm_head.", "output_proj.")
+                    mk = mk.replace("proj_out.", "output_proj.")
+                    mk = mk.replace("output.", "output_proj.")
+                mapped[mk] = v
+
+            # Load with strict=False to tolerate minor mismatches
+            missing, unexpected = model.load_state_dict(mapped, strict=False)
+
+            # Build Lightning-compatible checkpoint structure
+            ckpt = {
+                "state_dict": model.state_dict(),
+                "hyper_parameters": model_config,
+                "config": model_config,
+            }
+            torch.save(ckpt, str(out_ckpt_path))
+
+            return {
+                "success": True,
+                "checkpoint_path": str(out_ckpt_path),
+                "missing_keys": missing,
+                "unexpected_keys": unexpected,
+                "config": model_config,
+            }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
