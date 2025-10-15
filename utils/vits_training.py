@@ -43,15 +43,21 @@ if LIGHTNING_AVAILABLE:
         import torch
         if torch.cuda.is_available():
             # RTX 5060 Ti optimizations based on Copilot recommendations
-            torch.backends.cudnn.benchmark = True  # Auto-tune kernels
-            torch.backends.cuda.matmul.allow_tf32 = True  # Use TF32 on Ampere+
+            try:
+                torch.backends.cudnn.benchmark = True  # Auto-tune kernels
+                torch.backends.cuda.matmul.allow_tf32 = True  # Use TF32 on Ampere+
+            except Exception as backend_e:
+                logger.warning(f"Could not set backend optimizations: {backend_e}")
 
             # Check for modern GPU (compute capability 8.0+)
-            if hasattr(torch.cuda, 'get_device_capability'):
-                cap = torch.cuda.get_device_capability(0)
-                if cap[0] >= 8:  # Ampere or newer (RTX 30/40/50 series)
-                    torch.set_float32_matmul_precision('high')
-                    logger.info(f"GPU optimizations enabled for compute capability {cap[0]}.{cap[1]}")
+            try:
+                if hasattr(torch.cuda, 'get_device_capability'):
+                    cap = torch.cuda.get_device_capability(0)
+                    if cap[0] >= 8:  # Ampere or newer (RTX 30/40/50 series)
+                        torch.set_float32_matmul_precision('high')
+                        logger.info(f"GPU optimizations enabled for compute capability {cap[0]}.{cap[1]}")
+            except Exception as cap_e:
+                logger.warning(f"Could not set matmul precision: {cap_e}")
     except Exception as e:
         logger.warning(f"Could not apply GPU optimizations: {e}")
 
