@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     libsndfile1 \
     espeak-ng \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symbolic link for python
@@ -79,10 +80,13 @@ RUN pip install \
 # Install export requirements
 RUN pip install onnxruntime pydub
 
-# Install Montreal Forced Aligner
-RUN pip install montreal-forced-aligner
+# Install Montreal Forced Aligner (optional - requires kalpy which needs to be built from source)
+# Note: MFA is optional and training works fine without it
+# To enable MFA, you need to build kalpy from source:
+# pip install git+https://github.com/MontrealCorpusTools/kalpy.git
+RUN pip install montreal-forced-aligner pybind11
 
-# Download MFA models
+# Download MFA models (will fail if kalpy is not installed, that's OK)
 RUN mfa model download acoustic english_us_arpa || true
 RUN mfa model download dictionary english_us_arpa || true
 
